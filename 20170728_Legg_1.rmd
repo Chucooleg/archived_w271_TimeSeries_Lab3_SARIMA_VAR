@@ -59,20 +59,21 @@ auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
 
 ```{r}
 ts.plot(unem.ts); title("Unemployment Rate 1948-01 to 2017-06"); 
-abline(h = mean(unem.ts), col = "red", lty = "dotted")
+abline(h = mean(unem.ts), col = "red", lty = "dotdash", lwd = 2)
+abline(h = c((mean(unem.ts) + sd(unem.ts)),
+             (mean(unem.ts) + 2*sd(unem.ts)),
+             (mean(unem.ts) + 3*sd(unem.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(h = c((mean(unem.ts) - sd(unem.ts)),
+             (mean(unem.ts) - 2*sd(unem.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+
 #abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "blue")
+legend("topleft", c("Standard Deviations","Mean"), 
+       col = c("red","red"), 
+       lty = c("dotted", "dotdash"), bty = "n",
+       lwd = c(1,2))
 ```
-
-(persistent)
-
-```{r}
-ts.plot(auto.ts); title("Car Sales 1976-01 to 2017-06")
-abline(h = mean(auto.ts), col = "red", lty = "dotted")
-#abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "blue")
-```
-
-(A Sharp Spike in 1980s)
-(less persistent than employment rate)
 
 ```{r}
 hist(unem.data$UNRATENSA, main = "distribution of unemployment rate",
@@ -97,6 +98,32 @@ legend("topright", c("Mean","Standard Deviations", "Median"),
 ```
 
 ```{r}
+unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) + 2.5*sd(unem.data$UNRATENSA),]
+```
+
+
+(persistent)
+(clear outlier, examine) (continuous from persistent trend not errorneous, correspond to the early 1980s recession in the US which ended in November 1982). second peak correspond to the Great recession which officially lasted from Dec 2007 - June 2009)
+
+```{r}
+ts.plot(auto.ts); title("Auto Sales 1976-01 to 2017-06")
+abline(h = mean(auto.ts), col = "red", lty = "dotdash", lwd = 2)
+abline(h = c((mean(auto.ts) + sd(auto.ts)),
+             (mean(auto.ts) + 2*sd(auto.ts)),
+             (mean(auto.ts) + 3*sd(auto.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(h = c((mean(auto.ts) - sd(auto.ts)),
+             (mean(auto.ts) - 2*sd(auto.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+#abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "blue")
+legend("topleft", c("Standard Deviations","Mean"), 
+       col = c("red","red"), 
+       lty = c("dotted", "dotdash"), bty = "n",
+       lwd = c(1,2))
+```
+
+```{r}
 hist(auto.data$TOTALNSA, main = "distribution of auto sales",
      xlab = "auto sales - thousands of units")
 
@@ -118,6 +145,18 @@ legend("topright", c("Mean","Standard Deviations", "Median"),
        lty = c("dotdash", "dotted","dotdash"))
 ```
 
+```{r}
+auto.data[auto.data$TOTALNSA < mean(auto.data$TOTALNSA) - 2*sd(auto.data$TOTALNSA),]
+```
+
+```{r}
+head(auto.data[auto.data$TOTALNSA > mean(auto.data$TOTALNSA) + 2*sd(auto.data$TOTALNSA),],1)
+```
+
+(A Sharp Spike in 1980s)
+(less persistent than employment rate)
+(two plunges in the early 1980s and 2009 respond to recessions)
+(one spike in 1986 due to oil prices plunged in more than half that year)
 
 ```{r}
 summary(unem.data$UNRATENSA)
@@ -170,7 +209,10 @@ plot(decompose(unem.ts, type = "additive"))
 ```
 
 (Decomposition Assumption, Findings of Noise of Inconsistent Variance)
-(Seasonality is not clear, but clearly not stationary. can be random walk)
+(Trend clearly not stationary --> growing variance. can be random walk with mild drift)
+(Seasonality seem regular)
+(Noise is clearly not stationary)
+(We cannot use regression mode)
 
 ```{r}
 # Kernel smoothing
@@ -214,10 +256,16 @@ abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 plot(decompose(auto.ts, type = "additive"))
 ```
 
+(Decomposition Assumption, Findings of Noise of Inconsistent Variance)
+(Trend is sloght upward trend, doesn't look like a random walk. Compared to unemployment it is more stable)
+(Seasonality seem regular)
+(Noise is clearly not stationary)
+(We cannot use regression mode)
+
 
 ## Establish Stationarity
 
-### Seasonality Investigation
+### Seasonality and Unit Root Investigation -- unemployment rate
 
 ```{r}
 # Create Function to make univariate scatterplot matrix of autocorrleation
@@ -242,11 +290,11 @@ lag.plot1=function(data1,max.lag=1,corr=TRUE,smooth=FALSE){
 ```
 
 ```{r}
-monthplot(unem.ts)
+monthplot(unem.ts);title("monthly plot Unemployment Rate")
 ```
 
 ```{r}
-lag.plot1(unem.ts,12,smooth=TRUE) 
+lag.plot1(unem.ts,16,smooth=TRUE) 
 ```
 
 ```{r}
@@ -255,25 +303,130 @@ acf(unem.ts, lag.max = 61, main = ""); title("ACF Unemployment Rate")
 pacf(unem.ts, lag.max = 61, main = ""); title("PACF Unemployment Rate")
 ```
 
-
 (monthly plot shows higher values in the beginning and mid year)
 (can difference it in SARIMA, if linear regression should use dummy for Jan Feb and Jun July)
 
-(weak seasonality, but can still try to do seasonal difference)
-(strongest correlation with first lag, then weaker with higher lags)
+(weak seasonality, probably no need for seasonal difference)
+(strongest correlation with first lag, then weaker and weaker lags)
 
-(acf slow decay, random walk or long memory process)
+(acf slow decay, random walk with drift)
 (some sign of seasonality -- note the local peak at lag 12, 24, 36, 48)
 
 (pacf most significant at lag 1 can be AR(1))
 (pacf also show sign at lag 12, 25,37,49 , can be a seasonal MA component)
 
 ```{r}
-monthplot(auto.ts)
+unem.ts.diff12 = diff(unem.ts, lag = 12)
 ```
 
 ```{r}
-lag.plot1(auto.ts,12,smooth=TRUE) 
+par(mfrow = c(2,1))
+ts.plot(unem.ts)
+abline(h = mean(unem.ts), col = "red", lty = "dotted")
+title("Raw series - Unemployment Rate")
+ts.plot(unem.ts.diff12)
+title("Seasonally Differenced - Unemployment Rate")
+abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
+```
+
+(Seasonal Regularities Clearly Removed, Trend is less persistent)
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff12, lag.max = 61, main = "")
+title("ACF Seasonally Diffenced Unemployment Rate")
+pacf(unem.ts.diff12, lag.max = 61, main = "")
+title("PACF Seasonally Diffenced Unemployment Rate")
+```
+
+(pacf sees sign lags 13, 25, 37 without much echo of graudal positive decay in acf --> seasonal MA(1) )
+(Seasonal Differencing may not be necessary --> Seasonal MA(1) can be a sign that we have over differenced the series)
+
+(pacf sharp drop lag 1, echoed by acf gradual drop from lag 1, AR(1))
+(pacf some sign lags 2-4, can be AR(2-4) components, hard to tell from acf, let model loop judge)
+
+Possible model SARIMA(4,0,0)(0,1,1)
+
+```{r}
+unem.ts.diff = diff(unem.ts, lag = 1)
+```
+
+```{r}
+tseries::adf.test(unem.ts)
+tseries::pp.test(unem.ts)
+tseries::adf.test(unem.ts.diff)
+tseries::pp.test(unem.ts.diff)
+tseries::adf.test(unem.ts.diff12)
+tseries::pp.test(unem.ts.diff12)
+```
+
+(ADF failed to reject raw series, unit root is present)
+(Augemented Dicky Fuller Test reject first differenced series more strongly than seasonally differenced series. First differencing should be enough. Seasonality can be taken care of by seasonal AR and MA )
+
+(Should not do both seasonally and first differencing)
+
+```{r}
+par(mfrow = c(3,1))
+
+ts.plot(unem.ts)
+abline(h = mean(unem.ts), col = "red", lty = "dotted")
+title("Raw series - Unemployment Rate")
+
+ts.plot(unem.ts.diff12)
+abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
+title("Seasonally Differenced - Unemployment Rate")
+
+ts.plot(unem.ts.diff)
+title("First Differenced - Unemployment Rate")
+abline(h = mean(unem.ts.diff), col = "red", lty = "dotted")
+```
+
+```{r}
+par(mfrow = c(2,1))
+
+ts.plot(unem.ts)
+abline(h = mean(unem.ts), col = "red", lty = "dotted")
+title("Raw series - Unemployment Rate")
+
+ts.plot(unem.ts.diff12)
+abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
+title("Seasonally Differenced - Unemployment Rate")
+
+ts.plot(unem.ts.diff)
+title("First Differenced - Unemployment Rate")
+abline(h = mean(unem.ts.diff), col = "red", lty = "dotted")
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 61, main = "")
+title("ACF First Difference Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 61, main = "")
+title("PACF First Difference Unemployment Rate")
+```
+
+(long memory seasonal AR(1) and seasonal MA(1))
+(pacf show some significance lag 2-9 , without much echo in acf --> let loop figure it out)
+
+possible SARIMA(9,1,q)(1,0,1)
+
+Two possible transformations -- SARIMA(4,0,q)(P,1,1), SARIMA(9,1,q)(1,0,1), 
+
+
+
+
+
+
+
+
+### Seasonality Investigation -- Auto Sales
+
+```{r}
+monthplot(auto.ts);title("monthly plot Autosales")
+```
+
+```{r}
+lag.plot1(auto.ts,16,smooth=TRUE) 
 ```
 
 ```{r}
@@ -282,7 +435,6 @@ acf(auto.ts, lag.max = 61, main = ""); title("ACF Autosales")
 pacf(auto.ts, lag.max = 61, main = ""); title("PACF Autosales")
 ```
 
-
 (monthly plot shows more discrete values)
 (seasonality is much stronger. clearly correlated with lag 12)
 (should seasonal difference it)
@@ -290,3 +442,86 @@ pacf(auto.ts, lag.max = 61, main = ""); title("PACF Autosales")
 (acf slow decay but show clearn local maximum at lag 12, 24, 36 , 48)
 
 (pacf show sign at lag 1 and 12, AR(1) and SAR(1))
+
+```{r}
+auto.ts.diff12 = diff(auto.ts, lag = 12)
+```
+
+```{r}
+par(mfrow = c(2,1))
+ts.plot(auto.ts, main = "") 
+title("Raw series - Auto Sales")
+ts.plot(auto.ts.diff12, main = "")
+title("Seasonally Differenced - Auto Sales")
+```
+
+(Regular Seasonal Pattern Clearly Removed)
+
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts.diff12, lag.max = 61, main = "")
+title("ACF for Seasonally Differenced Autosales")
+pacf(auto.ts.diff12, lag.max = 61, main = "")
+title("PACF for Seasonally Differenced Autosales")
+```
+
+(pacf Still see -ve autocorrelation on Lag 1,2 and 3, acf after lag 3 shows gradual decay --> can be seasonal AR(3))
+(pacf still see sharp drop at lag 1 and acf still see graudual decay from lag 1)
+(pacf see sign, gradual drop lag 2-5, can be a MA(1) as well)
+
+
+```{r}
+auto.ts.diff = diff(auto.ts, lag = 1)
+```
+
+```{r}
+tseries::adf.test(auto.ts)
+tseries::pp.test(auto.ts)
+tseries::adf.test(auto.ts.diff)
+tseries::pp.test(auto.ts.diff)
+tseries::adf.test(auto.ts.diff12)
+tseries::pp.test(auto.ts.diff12)
+```
+
+(all TS reject Ho of unit root, no need for first differencing)
+
+```{r}
+par(mfrow = c(3,1))
+ts.plot(auto.ts)
+abline(h = mean(auto.ts), col = "red", lty = "dotted")
+title("Raw series - Auto Sales")
+
+ts.plot(auto.ts.diff12)
+title("Seasonally Differenced - Auto Sales")
+abline(h = mean(auto.ts.diff12), col = "red", lty = "dotted")
+
+ts.plot(auto.ts.diff)
+title("First Differenced - Auto Sales")
+abline(h = mean(auto.ts.diff), col = "red", lty = "dotted")
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 61, main = "")
+title("ACF First Difference Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 61, main = "")
+title("PACF First Difference Unemployment Rate")
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts.diff, lag.max = 61, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 61, main = "")
+title("PACF First Difference Auto Sales")
+```
+
+(Seasonal AR(1))
+(pacf Non-seasonal AR(11) -- on acf their effect cancels out each other. Let loop figure this out)
+
+Possible Model SARIMA(11,1,q)(1,0,Q)
+
+
+## Examine Bivariate Relationship
+
+
