@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+rm(list = ls())
 library(moments)
 library(psych)
 ```
@@ -19,7 +20,7 @@ library(psych)
 
 ```{r}
 unem.data = read.csv("UNRATENSA.csv", header = T)
-car.data = read.csv("TOTALNSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
 ```
 
 # EDA
@@ -28,7 +29,7 @@ car.data = read.csv("TOTALNSA.csv", header = T)
 
 ```{r}
 str(unem.data)
-str(car.data)
+str(auto.data)
 ```
 
 ```{r}
@@ -36,11 +37,11 @@ cbind(head(unem.data),tail(unem.data))
 ```
 
 ```{r}
-cbind(head(car.data),tail(car.data))
+cbind(head(auto.data),tail(auto.data))
 ```
 
 ```{r}
-nrow(unem.data) - nrow(car.data)
+nrow(unem.data) - nrow(auto.data)
 ```
 
 - Both datasets are time indexed, accompanied with a key variable of interests. With UNRATENSA, the key variable refers to unemployment rate. With TOTALNSA, the key variable refers to car sale. 
@@ -53,30 +54,85 @@ nrow(unem.data) - nrow(car.data)
 
 ```{r}
 unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
-car.ts = ts(car.data$TOTALNSA, frequency = 12, start = c(1976,1))
+auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
 ```
 
 ```{r}
 ts.plot(unem.ts); title("Unemployment Rate 1948-01 to 2017-06"); 
 abline(h = mean(unem.ts), col = "red", lty = "dotted")
-ts.plot(car.ts); title("Car Sales 1976-01 to 2017-06")
-abline(h = mean(car.ts), col = "red", lty = "dotted")
+#abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "blue")
+```
+
+(persistent)
+
+```{r}
+ts.plot(auto.ts); title("Car Sales 1976-01 to 2017-06")
+abline(h = mean(auto.ts), col = "red", lty = "dotted")
+#abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "blue")
+```
+
+(A Sharp Spike in 1980s)
+(less persistent than employment rate)
+
+```{r}
+hist(unem.data$UNRATENSA, main = "distribution of unemployment rate",
+     xlab = "Unemployment Rate")
+
+abline(v = mean(unem.data$UNRATENSA), col = "red", lty = "dotdash"
+       , lwd = 2)
+abline(v = c((mean(unem.data$UNRATENSA) + sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) + 2*sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) + 3*sd(unem.data$UNRATENSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(v = c((mean(unem.data$UNRATENSA) - sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) - 2*sd(unem.data$UNRATENSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+abline(v = median(unem.data$UNRATENSA), col = "green", lty = "dotdash"
+       , lwd = 2)
+
+legend("topright", c("Mean","Standard Deviations", "Median"), 
+       col = c("red","red","green"), 
+       lty = c("dotdash", "dotted","dotdash"))
 ```
 
 ```{r}
-hist(unem.data$UNRATENSA, main = "distribution of unemployment rate")
-hist(car.data$TOTALNSA, main = "distribution of car sales")
+hist(auto.data$TOTALNSA, main = "distribution of auto sales",
+     xlab = "auto sales - thousands of units")
+
+abline(v = mean(auto.data$TOTALNSA), col = "red", lty = "dotdash"
+       , lwd = 2)
+abline(v = c((mean(auto.data$TOTALNSA) + sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) + 2*sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) + 3*sd(auto.data$TOTALNSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(v = c((mean(auto.data$TOTALNSA) - sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) - 2*sd(auto.data$TOTALNSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+abline(v = median(auto.data$TOTALNSA), col = "green", lty = "dotdash"
+       , lwd = 2)
+
+legend("topright", c("Mean","Standard Deviations", "Median"), 
+       col = c("red","red","green"), 
+       lty = c("dotdash", "dotted","dotdash"))
 ```
+
+
 ```{r}
 summary(unem.data$UNRATENSA)
-summary(car.data$TOTALNSA)
+summary(auto.data$TOTALNSA)
 moments::kurtosis(unem.data$UNRATENSA)
 ```
 
-### Trend Examination
+### Trend Examination with Smoothers and Decomposition
 
 ```{r}
 # Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
 unem.k.smooth.wide = ksmooth(time(unem.ts), 
                              unem.ts, kernel = c("normal"), 
                              bandwidth = 4)
@@ -88,32 +144,71 @@ unem.k.smooth.narrow = ksmooth(time(unem.ts),
 # Make plot
 plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
      main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
 lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
 lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
-abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "gray")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
 ```
 
 ```{r}
 # Moving Average Filter
-unem.k.smooth.wide = ksmooth(time(unem.ts), 
-                             unem.ts, kernel = c("normal"), 
-                             bandwidth = 4)
-
-unem.k.smooth.narrow = ksmooth(time(unem.ts), 
-                               unem.ts, kernel = c("normal"), 
-                               bandwidth = 0.5)
+unem.ma.smooth.4year = filter(unem.ts, sides = 1, rep(1/60, 60))
+unem.ma.smooth.annual = filter(unem.ts, sides = 1, rep(1/12, 12))
+unem.ma.smooth.halfyear = filter(unem.ts, sides = 1, rep(1/6, 6))
 
 # Make plot
 plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
-     main = "Unemployment Rate - Kernel Smoothed")
-lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
-lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
-abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "gray")
+     main = "Unemployment Rate - Moving Average Filtered")
+lines(unem.ma.smooth.4year, col = "magenta")
+lines(unem.ma.smooth.annual, col = "red")
+lines(unem.ma.smooth.halfyear, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
 ```
 
+```{r}
+plot(decompose(unem.ts, type = "additive"))
+```
 
+(Decomposition Assumption, Findings of Noise of Inconsistent Variance)
 
-Question 1:
-During your EDA, you notice that your data exhibits both seasonality (different months have different heights)
-AND that there is a clear linear trend. How many order of non-seasonal and seasonal differencing would it
-take to make this time-series stationary in the mean? Why?
+```{r}
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
+     main = "Car Sales - Kernel Smoothed")
+lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+```
+
+```{r}
+# Moving Average Filter
+auto.ma.smooth.4year = filter(auto.ts, sides = 1, rep(1/60, 60))
+auto.ma.smooth.annual = filter(auto.ts, sides = 1, rep(1/12, 12))
+auto.ma.smooth.halfyear = filter(auto.ts, sides = 1, rep(1/6, 6))
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Car Sales",
+     main = "Car Sales - Moving Average Filtered")
+lines(auto.ma.smooth.4year, col = "magenta")
+lines(auto.ma.smooth.annual, col = "red")
+lines(auto.ma.smooth.halfyear, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+```
+
+```{r}
+plot(decompose(auto.ts, type = "additive"))
+```

@@ -1,0 +1,77 @@
+EDA
+
+- Both time series 
+
+## Time series Overvview
+
+### Make into TS and plot
+
+### Make into histogram
+
+### Smoothing
+
+- MA filter, Kernel Smmo
+
+- Identify Trend
+
+### Decompose 
+
+
+## Establish Stationarity
+
+## Seasonality and Autocorrelation
+
+### Examine month plot (aggregate by month)
+
+### Scatterplot matrix with itself
+
+Seasonal Differencing? Identify Seasonality
+
+- Examine acf and pacf
+
+- test for unit root (adf test, pp test)
+
+- Difference it once
+
+- plot the differenced ts
+
+First Differencing? Identify if random walk or random walk with drift
+
+- Examine acf and pacf from seasonally differenced ts
+
+- test for unit root again (adf test, pp test)
+
+- Difference it once more
+
+- plot the differenced ts
+
+- Look stationary? (Ljung-Box test)
+
+- Examine acf and pacf
+
+- eyeball AR, MA components
+
+
+
+
+
+## Examine Bivariate Relationship
+
+- intersect the two time series
+
+### ts Plot overlap two series
+
+### Examiine ccf and ccd
+
+### Scatterplot matrix with each other
+
+### Did we get unit-roots above?
+--Yes --> test for co-integration (po.test) (VECM, or difference both and do VAR)
+--Yes --> try to difference the two and examine the linear combo as a ts, acf and pacf
+
+### Take first difference and suggest VAR
+
+
+
+Q3. 
+W10 Live Notes --> Why SARIMA may be better than VAR.
