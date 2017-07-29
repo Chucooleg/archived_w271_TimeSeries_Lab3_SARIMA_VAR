@@ -1,0 +1,47 @@
+---
+title: "dummy"
+author: "Legg (Ho Man) Yeung"
+date: "July 28, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+theta = c(rep(0,11),.9)
+phi = 0
+  
+ACF = ARMAacf(ar=phi, ma=theta, 100)
+PACF = ARMAacf(ar=phi, ma=theta, 100, pacf=TRUE)
+
+plot(ACF, type="h", xlab="lag", ylim=c(-.1,1))
+abline(h=0)
+plot(PACF, type="h", xlab="lag", ylim=c(-.1,1))
+abline(h=0)
+```
+
+```{r}
+# Simulate
+phi = c(rep(0,11),.9)
+sAR = arima.sim(list(order = c(12,0,0), 
+                     ar = phi
+                     #, ma = theta
+                     ), n = 500)
+sAR = ts(sAR, freq = 12)
+acf(sAR, lag.max = 49)
+pacf(sAR, lag.max = 49)
+```
+
+```{r}
+# Simulate
+theta = c(rep(0,12),-.8)
+sAR = arima.sim(list(order = c(0,0,13), 
+                     #ar = phi
+                     ma = theta
+                     ), n = 500)
+sAR = ts(sAR, freq = 12)
+acf(sAR, lag.max = 49)
+pacf(sAR, lag.max = 49)
+```

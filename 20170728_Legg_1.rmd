@@ -170,6 +170,7 @@ plot(decompose(unem.ts, type = "additive"))
 ```
 
 (Decomposition Assumption, Findings of Noise of Inconsistent Variance)
+(Seasonality is not clear, but clearly not stationary. can be random walk)
 
 ```{r}
 # Kernel smoothing
@@ -212,3 +213,80 @@ abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```{r}
 plot(decompose(auto.ts, type = "additive"))
 ```
+
+
+## Establish Stationarity
+
+### Seasonality Investigation
+
+```{r}
+# Create Function to make univariate scatterplot matrix of autocorrleation
+lag.plot1=function(data1,max.lag=1,corr=TRUE,smooth=FALSE){ 
+   name1=paste(deparse(substitute(data1)),"(t-",sep="")
+   name2=paste(deparse(substitute(data1)),"(t)",sep="")
+   data1=as.ts(data1)
+   max.lag=as.integer(max.lag)
+   prow=ceiling(sqrt(max.lag))
+   pcol=ceiling(max.lag/prow)
+   a=acf(data1,max.lag,plot=FALSE)$acf[-1]
+  par(mfrow=c(prow,pcol), mar=c(2.5, 4, 2.5, 1), cex.main=1.1, font.main=1)
+  for(h in 1:max.lag){                       
+   plot(lag(data1,-h), data1, xy.labels=FALSE, main=paste(name1,h,")",sep=""), ylab=name2, xlab="") 
+    if (smooth==TRUE) 
+    lines(lowess(ts.intersect(lag(data1,-h),data1)[,1],
+                 ts.intersect(lag(data1,-h),data1)[,2]), col="red")
+    if (corr==TRUE)
+    legend("topright", legend=round(a[h], digits=2), text.col ="blue", bg="white", x.intersp=0)
+   }
+}
+```
+
+```{r}
+monthplot(unem.ts)
+```
+
+```{r}
+lag.plot1(unem.ts,12,smooth=TRUE) 
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts, lag.max = 61, main = ""); title("ACF Unemployment Rate")
+pacf(unem.ts, lag.max = 61, main = ""); title("PACF Unemployment Rate")
+```
+
+
+(monthly plot shows higher values in the beginning and mid year)
+(can difference it in SARIMA, if linear regression should use dummy for Jan Feb and Jun July)
+
+(weak seasonality, but can still try to do seasonal difference)
+(strongest correlation with first lag, then weaker with higher lags)
+
+(acf slow decay, random walk or long memory process)
+(some sign of seasonality -- note the local peak at lag 12, 24, 36, 48)
+
+(pacf most significant at lag 1 can be AR(1))
+(pacf also show sign at lag 12, 25,37,49 , can be a seasonal MA component)
+
+```{r}
+monthplot(auto.ts)
+```
+
+```{r}
+lag.plot1(auto.ts,12,smooth=TRUE) 
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts, lag.max = 61, main = ""); title("ACF Autosales")
+pacf(auto.ts, lag.max = 61, main = ""); title("PACF Autosales")
+```
+
+
+(monthly plot shows more discrete values)
+(seasonality is much stronger. clearly correlated with lag 12)
+(should seasonal difference it)
+
+(acf slow decay but show clearn local maximum at lag 12, 24, 36 , 48)
+
+(pacf show sign at lag 1 and 12, AR(1) and SAR(1))
