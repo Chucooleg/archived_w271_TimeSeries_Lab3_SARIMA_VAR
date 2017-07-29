@@ -1,0 +1,119 @@
+---
+title: "Lab3_Initial_Legg"
+author: "Legg (Ho Man) Yeung"
+date: "July 28, 2017"
+output: pdf_document
+html_document:
+  number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(moments)
+library(psych)
+```
+
+
+```{r}
+unem.data = read.csv("UNRATENSA.csv", header = T)
+car.data = read.csv("TOTALNSA.csv", header = T)
+```
+
+# EDA
+
+## Data Overview 
+
+```{r}
+str(unem.data)
+str(car.data)
+```
+
+```{r}
+cbind(head(unem.data),tail(unem.data))
+```
+
+```{r}
+cbind(head(car.data),tail(car.data))
+```
+
+```{r}
+nrow(unem.data) - nrow(car.data)
+```
+
+- Both datasets are time indexed, accompanied with a key variable of interests. With UNRATENSA, the key variable refers to unemployment rate. With TOTALNSA, the key variable refers to car sale. 
+
+- Both time series presents monthly data. UNRATENSA has 834 observations and starts from 1948-01-01. TOTALNSA has 498 observations  and starts from 1976-01-01. Both ends at 2017-06. UNRATENSA has 28 more years, that is 336 more observations than TOTALNSA.
+
+## Time series Overview
+
+### Time plots and Histograms
+
+```{r}
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
+car.ts = ts(car.data$TOTALNSA, frequency = 12, start = c(1976,1))
+```
+
+```{r}
+ts.plot(unem.ts); title("Unemployment Rate 1948-01 to 2017-06"); 
+abline(h = mean(unem.ts), col = "red", lty = "dotted")
+ts.plot(car.ts); title("Car Sales 1976-01 to 2017-06")
+abline(h = mean(car.ts), col = "red", lty = "dotted")
+```
+
+```{r}
+hist(unem.data$UNRATENSA, main = "distribution of unemployment rate")
+hist(car.data$TOTALNSA, main = "distribution of car sales")
+```
+```{r}
+summary(unem.data$UNRATENSA)
+summary(car.data$TOTALNSA)
+moments::kurtosis(unem.data$UNRATENSA)
+```
+
+### Trend Examination
+
+```{r}
+# Kernel smoothing
+unem.k.smooth.wide = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.ts), 
+                               unem.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "gray")
+```
+
+```{r}
+# Moving Average Filter
+unem.k.smooth.wide = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.ts), 
+                               unem.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "gray")
+```
+
+
+
+Question 1:
+During your EDA, you notice that your data exhibits both seasonality (different months have different heights)
+AND that there is a clear linear trend. How many order of non-seasonal and seasonal differencing would it
+take to make this time-series stationary in the mean? Why?
