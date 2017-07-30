@@ -579,7 +579,7 @@ cat("Corr(Annual Unemployment, Annual Autosales):", cor(aggregate(auto.intersect
 ```
 
 (Annual, aggregated series have stronger correlation)
-(Less non-linear than the monthly series. Elimination of seasons make overall trend correlation clearer but lost the granularity. we can say much about monthly lags of one series on another now.)
+(Less non-linear than the monthly series. Elimination of seasons make overall trend correlation clearer but also lost the non-linear relationship coming from the different seasonalities between the series)
 
 
 ## Examine cross-correlation
@@ -592,12 +592,25 @@ CCF Plots here
 astsa::lag2.plot(auto.intersect.ts, unem.intersect.ts,16)
 ```
 
+(The correlation with high order lags are still mildly non-linear)
+(it says that behavior of unemployment rate may be different for high auto sales vs low auto sales)
+
+```{r}
+astsa::lag2.plot(unem.intersect.ts, auto.intersect.ts,12)
+```
+
+(on the other hand, the ccf matrices of auto sales against unem makes better sense, and the relationship seem quite linear and intuitive. strongest at lag 1)
+
 
 ```{r}
 ccf(auto.intersect.ts, unem.intersect.ts, main = "")
 ```
 
+(CCF strongest at lag -1 of unem and lag 0 of auto)
 
+```{r}
+ccf(unem.intersect.ts, auto.intersect.ts, main = "")
+```
 
 ```{r}
 po.test(cbind(auto.intersect.ts, unem.intersect.ts))
