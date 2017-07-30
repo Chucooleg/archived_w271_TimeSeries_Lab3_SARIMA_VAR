@@ -44,9 +44,7 @@ cbind(head(auto.data),tail(auto.data))
 nrow(unem.data) - nrow(auto.data)
 ```
 
-- Both datasets are time indexed, accompanied with a key variable of interests. With UNRATENSA, the key variable refers to unemployment rate. With TOTALNSA, the key variable refers to car sale. 
-
-- Both time series presents monthly data. UNRATENSA has 834 observations and starts from 1948-01-01. TOTALNSA has 498 observations  and starts from 1976-01-01. Both ends at 2017-06. UNRATENSA has 28 more years, that is 336 more observations than TOTALNSA.
+Both datasets are time indexed, accompanied with a key variable of interests. With UNRATENSA, the key variable refers to unemployment rate. With TOTALNSA, the key variable refers to car sale. Both time series presents monthly data. UNRATENSA has 834 observations and starts from 1948-01-01. TOTALNSA has 498 observations  and starts from 1976-01-01. Both ends at 2017-06. UNRATENSA has 28 more years, that is 336 more observations than TOTALNSA.
 
 ## Time series Overview
 
@@ -267,29 +265,6 @@ abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
 ```{r}
-# Kernel smoothing
-auto.k.smooth.widest = ksmooth(time(auto.ts), 
-                             auto.ts, kernel = c("normal"), 
-                             bandwidth = 10)
-
-auto.k.smooth.wide = ksmooth(time(auto.ts), 
-                             auto.ts, kernel = c("normal"), 
-                             bandwidth = 4)
-
-auto.k.smooth.narrow = ksmooth(time(auto.ts), 
-                               auto.ts, kernel = c("normal"), 
-                               bandwidth = 1)
-
-# Make plot
-plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
-     main = "Car Sales - Kernel Smoothed")
-lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
-lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
-lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
-abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
-```
-
-```{r}
 combined.raw = ts.intersect(unem.ts, auto.ts)
 unem.intersect.ts = combined.raw[,1]
 
@@ -338,17 +313,13 @@ lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
 abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
-Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior. It resembles less of a random walk and drift is not entirely apparent. Seasonally pattern is also stronger. We plotted the two series at the same time interval and kernel bandwidth for direct comparison.
+Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior, and appear to be relatively stable between the two aforementioned recessions in early 1980s and late 2000s. It resembles less of a random walk and drift is not entirely apparent. Seasonal pattern is also stronger. Below, we plotted the two series at the same time interval and kernel bandwidth for direct comparison.
 
 ```{r}
 plot(decompose(auto.ts, type = "additive"))
 ```
 
-(Decomposition Assumption, Findings of Noise of Inconsistent Variance)
-(Trend is sloght upward trend, doesn't look like a random walk. Compared to unemployment it is more stable)
-(Seasonality seem regular)
-(Noise is clearly not stationary)
-(We cannot use regression mode)
+The trend component observed in the decomposed series concur with our intuitions from the smoothed series. With the seasonal component taken out, the random component show a spike in mid-1980s and several more in 2000s, both of which may correspond to respective oil price fluctuations. In general, the random component series shows higher variance before mid-1980s than after, which we have also observed in the unemployment series. The decomposed components are clearly not stationary, which against suggest that OLS is not appropriate. 
 
 
 ## Establish Stationarity
@@ -359,9 +330,13 @@ plot(decompose(auto.ts, type = "additive"))
 monthplot(unem.ts);title("monthly plot Unemployment Rate")
 ```
 
+The monthly plot show some seasonal pattern at the mean, but the range of unemployment variation for each month also overlap a lot with other months. So the seasonal pattern exists but is not very strong. We see that unemployment rate tend to be a little higher in the beginning and middle of each year followed by mild gradual decrease.
+
 ```{r}
 astsa::lag1.plot(unem.ts,16) 
 ```
+
+The above scatterplot shows that the series is most correlated with its first lag, then correlations grow weaker and the point clouds becomes more scattered with larger lags without any sign of picking up at lag 12. This plot itself doesn't suggest seasonal effects.
 
 ```{r}
 par(mfrow = c(2,1))
@@ -369,33 +344,46 @@ acf(unem.ts, lag.max = 61, main = ""); title("ACF Unemployment Rate")
 pacf(unem.ts, lag.max = 61, main = ""); title("PACF Unemployment Rate")
 ```
 
-(monthly plot shows higher values in the beginning and mid year)
-(can difference it in SARIMA, if linear regression should use dummy for Jan Feb and Jun July)
+The acf shows slow decay from lag 0 coupled with a sharp drop of pacf after lag 1. This is a sign of an AR(1) process. We see minor local maxima on the acf at lag 12, 24, 36 and 48 which indicate seasonal effects. The significant, negative pacfs which tails off at lag 13, 25, 37, 49 suggest seasonal AR or MA components. Some smaller significant pacf values within the first 12 lags suggest either some AR processes or an MA process in that range.
 
-(weak seasonality, probably no need for seasonal difference)
-(strongest correlation with first lag, then weaker and weaker lags)
-
-(acf slow decay, random walk with drift)
-(some sign of seasonality -- note the local peak at lag 12, 24, 36, 48)
-
-(pacf most significant at lag 1 can be AR(1))
-(pacf also show sign at lag 12, 25,37,49 , can be a seasonal MA component)
+ Although there are some seasonal effects in the unemployment series, they don't seem strong enough to require seasonal differencing. To help us determine, we compare the seasonal differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
 
 ```{r}
 unem.ts.diff12 = diff(unem.ts, lag = 12)
+unem.ts.diff = diff(unem.ts, lag = 1)
 ```
 
 ```{r}
 par(mfrow = c(2,1))
-ts.plot(unem.ts)
-abline(h = mean(unem.ts), col = "red", lty = "dotted")
-title("Raw series - Unemployment Rate")
+
 ts.plot(unem.ts.diff12)
+abline(lm(unem.ts.diff12 ~ time(unem.ts.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(unem.ts.diff12), lwd = 0.5)
+abline(h = c(mean(unem.ts.diff12), mean(unem.ts.diff12) + 
+               2 * sd(unem.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(unem.ts.diff12), mean(unem.ts.diff12) - 
+               2 * sd(unem.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
 title("Seasonally Differenced - Unemployment Rate")
-abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
+
+ts.plot(unem.ts.diff)
+abline(lm(unem.ts.diff ~ time(unem.ts.diff)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(unem.ts.diff), lwd = 0.5)
+abline(h = c(mean(unem.ts.diff), mean(unem.ts.diff) + 
+               2 * sd(unem.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(unem.ts.diff), mean(unem.ts.diff) - 
+               2 * sd(unem.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First Differenced - Unemployment Rate")
+
 ```
 
-(Seasonal Regularities Clearly Removed, Trend is less persistent)
+The seasonally differenced series retained most of the random walk like behavior in the raw series and appear more persistent before mid 1980s. The first differenced series eliminated most random walk and persistent behaviors but variance is generally larger before 1980. There is still a slight downward trend (green regression line) with the seasonal differenced series. (red line refers to 2 standard deviation marks)
+
 
 ```{r}
 par(mfrow = c(2,1))
@@ -405,17 +393,32 @@ pacf(unem.ts.diff12, lag.max = 61, main = "")
 title("PACF Seasonally Diffenced Unemployment Rate")
 ```
 
-(pacf sees sign lags 13, 25, 37 without much echo of graudal positive decay in acf --> seasonal MA(1) )
-(Seasonal Differencing may not be necessary --> Seasonal MA(1) can be a sign that we have over differenced the series)
-
-(pacf sharp drop lag 1, echoed by acf gradual drop from lag 1, AR(1))
-(pacf some sign lags 2-4, can be AR(2-4) components, hard to tell from acf, let model loop judge)
-
-Possible model SARIMA(4,0,0)(0,1,1)
+Above plots: In the seasonal differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, 37 as well. This suggests an AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4, they can be AR(2-4) components but hard to tell at this stage. We may entertain the model is SARIMA(4,0,q)(3,1,Q) from these plots.
 
 ```{r}
-unem.ts.diff = diff(unem.ts, lag = 1)
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 61, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 61, main = "")
+title("PACF First Diffenced Unemployment Rate")
 ```
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 720, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 720, main = "")
+title("PACF First Diffenced Unemployment Rate")
+```
+
+Above plots: In the first differenced series, the plots some periodic behavior, the extended plot show that acf tails off until lag 720, which suggest either a seasonal long memory or seasonal integrated process (both SAR(1)) in combination with some sesonal AR(2-4) components or in combination with a seasonal MA component. The pacf show some significance between lag 2-9 without a little echo in the acf lag 13-16, which can come from some MA processes but it's hard to say at this stage. We simply assume some ARMA processes present. We may entertain the model as a SARIMA(9,1,q)(4,0,Q) using these plots.
+
+Performing both differencing procedures may over-difference the series. To determine how much is enough, we perform unit root tests below to check for stationarity. Augmented Dicky Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
+
+  - Ho : The series has a unit root
+  - Ha : The series is stationary
+  
+In the ADF test, our null hypothesis assume that the process is a random walk with drift and some AR(p) components,$x_t = \beta_0 + \phi x_{t-1} + \sum_{j=1}^{p-1}\psi_j x_{t-j}  + w_t$, where $\beta_0$ represents the drift and $\phi = 1$. We are essentially testing the null hypothesis $\gamma = 0$ in the differenced series $\nabla x_t = \gamma x_{t-1} +  \sum_{j=1}^{p-1}\psi_j \nabla x_{t-j}  + w_t$ since $\gamma = \phi - 1$. Under the alternative hypothesis $\gamma < 0$. On the other hand, the Philips Perron test, our null hypothesis assume a model $x_t = \beta_0 + \rho_1 x_{t-1} + u_t$, where non-parametric correction is applied on $\rho$ to correct for serial correlation in $u_t$ already. We are essential testing of $\rho = 1$ in the null hypothesis.
 
 ```{r}
 tseries::adf.test(unem.ts)
@@ -426,75 +429,25 @@ tseries::adf.test(unem.ts.diff12)
 tseries::pp.test(unem.ts.diff12)
 ```
 
-(ADF failed to reject raw series, unit root is present)
-(Augemented Dicky Fuller Test reject first differenced series more strongly than seasonally differenced series. First differencing should be enough. Seasonality can be taken care of by seasonal AR and MA )
+As expected with the raw series, the ADF test failed to reject the null hypothesis that the series contains a unit root. The PP test results contradicts but we acknowledge that the test mechanism is different and that some early literature (Davidson and Mackinnon 2004) showed that ADF performs better in finite sample than PP test. All the tests rejected the null hypotheses that either the first differenced or seasonal differenced series contains a unit root and supports stationarities. We should not need to difference the raw series with lag 12 in addition to lag 1, or vice versa.
 
-(Should not do both seasonally and first differencing)
-
-```{r}
-par(mfrow = c(3,1))
-
-ts.plot(unem.ts)
-abline(h = mean(unem.ts), col = "red", lty = "dotted")
-title("Raw series - Unemployment Rate")
-
-ts.plot(unem.ts.diff12)
-abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
-title("Seasonally Differenced - Unemployment Rate")
-
-ts.plot(unem.ts.diff)
-title("First Differenced - Unemployment Rate")
-abline(h = mean(unem.ts.diff), col = "red", lty = "dotted")
-```
-
-```{r}
-par(mfrow = c(2,1))
-
-ts.plot(unem.ts)
-abline(h = mean(unem.ts), col = "red", lty = "dotted")
-title("Raw series - Unemployment Rate")
-
-ts.plot(unem.ts.diff12)
-abline(h = mean(unem.ts.diff12), col = "red", lty = "dotted")
-title("Seasonally Differenced - Unemployment Rate")
-
-ts.plot(unem.ts.diff)
-title("First Differenced - Unemployment Rate")
-abline(h = mean(unem.ts.diff), col = "red", lty = "dotted")
-```
-
-```{r}
-par(mfrow = c(2,1))
-acf(unem.ts.diff, lag.max = 61, main = "")
-title("ACF First Difference Unemployment Rate")
-pacf(unem.ts.diff, lag.max = 61, main = "")
-title("PACF First Difference Unemployment Rate")
-```
-
-(long memory seasonal AR(1) and seasonal MA(1))
-(pacf show some significance lag 2-9 , without much echo in acf --> let loop figure it out)
-
-possible SARIMA(9,1,q)(1,0,1)
-
-Two possible transformations -- SARIMA(4,0,q)(P,1,1), SARIMA(9,1,q)(1,0,1), 
+Unemployment series stationarity conclusion: The month plot, scatterplot matrix and autocorrelation plots suggest some but weak seasonality of our raw series, along with strong random walk behavior. The time plots, acf and pacf plots of the seasonal differenced series strongly suggest AR(1) process and that of the first differenced series strongly suggest seasonal AR(1) process. The unit root test suggested that we don't need to do both differencing. We may give slightly higher preference to a first differenced series with a long memory seasonal AR(1) component, but should still consider a seasonal differenced series as a candidate.
 
 
 
-
-
-
-
-
-### Seasonality Investigation -- Auto Sales
+### Seasonality and Unit Root Investigation -- unemployment rate
 
 ```{r}
 monthplot(auto.ts);title("monthly plot Autosales")
 ```
 
+Compared to that of unemployment rate, monthly plot of auto sales show much more discrete values in the mean. So the seasonal pattern is much stronger. We see that autosales tend to be noticeably lower in the first two months, picks up sharply in March, steps up and down for the rest of the year. Fall sales are generally lower than summer sales.
+
 ```{r}
 astsa::lag1.plot(auto.ts,16)
 ```
 
+Scatterplot matrix of auto sales with its own lags display clear seasonal dependence. Autocorrelation is highest with lag 12, that is this month last year, even more so compared to lag 1. The opposite patterns was observed in the unemployment rates series, when autocorrelation is highest with lag 1 and then gradually declines towards higher lags.
 
 ```{r}
 par(mfrow = c(2,1))
@@ -502,27 +455,46 @@ acf(auto.ts, lag.max = 61, main = ""); title("ACF Autosales")
 pacf(auto.ts, lag.max = 61, main = ""); title("PACF Autosales")
 ```
 
-(monthly plot shows more discrete values)
-(seasonality is much stronger. clearly correlated with lag 12)
-(should seasonal difference it)
+Similar to the unemployment series, the acf shows slow decay from lag 0, a sharp drop of pacf after lag 1 and some local acf maximums at lag 12, 24, 36 and 48. Unlike the unemployment series, the acf decay ends earlier at lag 36. The local maxima have much stronger profiles. Some significant pacf values occur before lag 12 which suggest either some AR or MA components(effects on acf plot is not discernable) in that range.
 
-(acf slow decay but show clearn local maximum at lag 12, 24, 36 , 48)
-
-(pacf show sign at lag 1 and 12, AR(1) and SAR(1))
+Based strong seasonal pattern in the above three plots, seasonal differencing would be useful in achieving stationarity. To help us determine, we again compare the seasonal differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
 
 ```{r}
 auto.ts.diff12 = diff(auto.ts, lag = 12)
+auto.ts.diff = diff(auto.ts, lag = 1)
 ```
+
 
 ```{r}
 par(mfrow = c(2,1))
-ts.plot(auto.ts, main = "") 
-title("Raw series - Auto Sales")
-ts.plot(auto.ts.diff12, main = "")
+
+ts.plot(auto.ts.diff12)
+abline(lm(auto.ts.diff12 ~ time(auto.ts.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff12), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) + 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) - 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
 title("Seasonally Differenced - Auto Sales")
+
+ts.plot(auto.ts.diff)
+abline(lm(auto.ts.diff ~ time(auto.ts.diff)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) + 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) - 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First Differenced - Auto Sales")
 ```
 
-(Regular Seasonal Pattern Clearly Removed)
+The seasonally differenced series noticeably removed the strong seasonal patterns and some degree of persistency from the raw series. The first differenced series removed most persistencies from the raw series but appear clustered regularly at seasonally intervals. Both series removed the upward trend in the raw series effectively.
+
 
 ```{r}
 par(mfrow = c(2,1))
@@ -532,14 +504,12 @@ pacf(auto.ts.diff12, lag.max = 61, main = "")
 title("PACF for Seasonally Differenced Autosales")
 ```
 
-(pacf Still see -ve autocorrelation on Lag 1,2 and 3, acf after lag 3 shows gradual decay --> can be seasonal AR(3))
-(pacf still see sharp drop at lag 1 and acf still see graudual decay from lag 1)
-(pacf see sign, gradual drop lag 2-5, can be a MA(1) as well)
+Above plots: Similar to unmployment rate, in the seasonal differenced serie of auto sales, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lag 12, 24 and 36. This suggests an AR(1) process in combination with seasonal AR(3) or some seasonal MA component. Also notice a few significant pacfs at lags 2-4. We may entertain the model as a SARIMA(4,0,q)(3,1,Q) using these plots. It doesn't seem like an additional first differencing is necessary.
 
+We perform unit root tests below to check for stationarities if the raw, firsr differenced and seasonal differenced series for auto sales. Augmented Dicky Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
 
-```{r}
-auto.ts.diff = diff(auto.ts, lag = 1)
-```
+  - Ho : The series has a unit root
+  - Ha : The series is stationary
 
 ```{r}
 tseries::adf.test(auto.ts)
@@ -550,30 +520,7 @@ tseries::adf.test(auto.ts.diff12)
 tseries::pp.test(auto.ts.diff12)
 ```
 
-(all TS reject Ho of unit root, no need for first differencing)
-
-```{r}
-par(mfrow = c(3,1))
-ts.plot(auto.ts)
-abline(h = mean(auto.ts), col = "red", lty = "dotted")
-title("Raw series - Auto Sales")
-
-ts.plot(auto.ts.diff12)
-title("Seasonally Differenced - Auto Sales")
-abline(h = mean(auto.ts.diff12), col = "red", lty = "dotted")
-
-ts.plot(auto.ts.diff)
-title("First Differenced - Auto Sales")
-abline(h = mean(auto.ts.diff), col = "red", lty = "dotted")
-```
-
-```{r}
-par(mfrow = c(2,1))
-acf(unem.ts.diff, lag.max = 61, main = "")
-title("ACF First Difference Unemployment Rate")
-pacf(unem.ts.diff, lag.max = 61, main = "")
-title("PACF First Difference Unemployment Rate")
-```
+All tests rejected the null hypotheses for all three series. Notice that the ADF test p-value for the raw series is closer to the critical cut off of 0.05. There can be a very weak chance that the raw series contains a unit root. Again we should not apply first or both differencing procedures to the raw series to avoid over-differencing. Below, we examine the acf and pacf for the first differenced series to confirm our intuition.
 
 ```{r}
 par(mfrow = c(2,1))
@@ -583,10 +530,18 @@ pacf(auto.ts.diff, lag.max = 61, main = "")
 title("PACF First Difference Auto Sales")
 ```
 
-(Seasonal AR(1))
-(pacf Non-seasonal AR(11) -- on acf their effect cancels out each other. Let loop figure this out)
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts.diff, lag.max = 720, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 720, main = "")
+title("PACF First Difference Auto Sales")
+```
 
-Possible Model SARIMA(11,1,q)(1,0,Q)
+Above plots: Similar to unmployment rate, in the first differenced serie of auto sales, the acf tails off very slowly until lag 360. Unlike that of the unemployment series, the seasonal ripples on the acf appear much stronger. This plots suggest a strong seasonal AR(1) component and some AR(p) components before lag 12.
+
+Auto sales series stationarity conclusion: The month plot, scatterplot matrix and autocorrelation plots suggest strong seasonality of our raw series. The time plots, acf and pacf plots of the seasonal differenced series suggest an AR(1) component and that of the first differenced series suggests a strong seasonal AR(1) process. The unit root tests suggest that we don't need to do first or both differencing. We may give higher preference to a seasonal differenced series with an AR(1) component, but may still entertain a first differenced series as a candidate.
+
 
 
 ## Examine Bivariate Relationship
