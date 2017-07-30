@@ -1,8 +1,13 @@
 EDA
 
-- Both time series 
 
-## Time series Overvview
+1. Data Overview (DONE)
+unem has 336 more obs than auto
+2. Time Series Overview
+### Time plots and Histograms
+unem.ts : persistency, unusual spikes (due to recession)
+auto.ts : less persistent than unem. stronger seasonal jots 
+
 
 ### Make into TS and plot
 
@@ -15,6 +20,8 @@ EDA
 - Identify Trend
 
 ### Decompose 
+
+
 
 
 ## Establish Stationarity
@@ -75,3 +82,26 @@ First Differencing? Identify if random walk or random walk with drift
 
 Q3. 
 W10 Live Notes --> Why SARIMA may be better than VAR.
+-------------------------------------------------------------
+
+Take away
+
+
+
+both series exhibit some degrees of seasonal and random walk/long memory process behavior. 
+To estab seasonality
+Primary suggestion for unem is no seasonal difference, take unit root
+(ACF scatterplot matrix)(unit root test result)
+Primary suggestion for auto is take seasonal difference, don't take unit root
+(ACF scatterplot matrix)(unit root test result rejects in all cases)
+
+
+
+
+How to VAR?
+auto clearly lags behind unem --> doesn't make much sense to use auto info
+don't strongly suggest unit root in both TS
+cointegration test yes
+but regressing unem on auto is not informative, residuals behavior are poor. linear combo is not strong
+
+

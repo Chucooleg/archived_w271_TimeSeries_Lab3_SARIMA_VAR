@@ -606,14 +606,11 @@ astsa::lag2.plot(unem.intersect.ts, auto.intersect.ts,12)
 ccf(auto.intersect.ts, unem.intersect.ts, main = "")
 ```
 
-(CCF strongest at lag -1 of unem and lag 0 of auto)
+(CCF strongest at -ve lags of unem and lag 0 of auto)
+(auto sales lags behind)
 
 ```{r}
-ccf(unem.intersect.ts, auto.intersect.ts, main = "")
-```
-
-```{r}
-po.test(cbind(auto.intersect.ts, unem.intersect.ts))
+tseries::po.test(cbind(auto.intersect.ts, unem.intersect.ts))
 ```
 
 ```{r}
@@ -625,6 +622,8 @@ summary(unem.auto.lm)
 library(car)
 car::residualPlot(unem.auto.lm)
 ```
+
+(strong curvature. first order auto doesn't effectively explain variations in unem)
 
 ```{r}
 par(mfrow = c(3,1))
@@ -647,7 +646,15 @@ plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
 title("Residuals from the Linear Regression of Unemployment Rate on Auto Sales")
 ```
 
+```{r}
+par(mfrow = c(2,1))
+acf(unem.auto.lm.res,61)
+pacf(unem.auto.lm.res,61)
+```
+
+
 (The residual series is clearly time-dependent and still picks up the trend in the unemployment rate)
+(acf and pacf still looks seasonal and persistent)
 (Evidence for existence of linear combination bewtween the two series is not strong)
 
 (Unlikely that auto , or lags of auto can effectively explain variations in unem. but the other way round may better)
