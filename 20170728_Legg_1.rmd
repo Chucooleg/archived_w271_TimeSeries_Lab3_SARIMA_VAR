@@ -268,33 +268,11 @@ plot(decompose(auto.ts, type = "additive"))
 ### Seasonality and Unit Root Investigation -- unemployment rate
 
 ```{r}
-# Create Function to make univariate scatterplot matrix of autocorrleation
-lag.plot1=function(data1,max.lag=1,corr=TRUE,smooth=FALSE){ 
-   name1=paste(deparse(substitute(data1)),"(t-",sep="")
-   name2=paste(deparse(substitute(data1)),"(t)",sep="")
-   data1=as.ts(data1)
-   max.lag=as.integer(max.lag)
-   prow=ceiling(sqrt(max.lag))
-   pcol=ceiling(max.lag/prow)
-   a=acf(data1,max.lag,plot=FALSE)$acf[-1]
-  par(mfrow=c(prow,pcol), mar=c(2.5, 4, 2.5, 1), cex.main=1.1, font.main=1)
-  for(h in 1:max.lag){                       
-   plot(lag(data1,-h), data1, xy.labels=FALSE, main=paste(name1,h,")",sep=""), ylab=name2, xlab="") 
-    if (smooth==TRUE) 
-    lines(lowess(ts.intersect(lag(data1,-h),data1)[,1],
-                 ts.intersect(lag(data1,-h),data1)[,2]), col="red")
-    if (corr==TRUE)
-    legend("topright", legend=round(a[h], digits=2), text.col ="blue", bg="white", x.intersp=0)
-   }
-}
-```
-
-```{r}
 monthplot(unem.ts);title("monthly plot Unemployment Rate")
 ```
 
 ```{r}
-lag.plot1(unem.ts,16,smooth=TRUE) 
+astsa::lag1.plot(unem.ts,16) 
 ```
 
 ```{r}
@@ -426,8 +404,9 @@ monthplot(auto.ts);title("monthly plot Autosales")
 ```
 
 ```{r}
-lag.plot1(auto.ts,16,smooth=TRUE) 
+astsa::lag1.plot(auto.ts,16)
 ```
+
 
 ```{r}
 par(mfrow = c(2,1))
@@ -524,4 +503,138 @@ Possible Model SARIMA(11,1,q)(1,0,Q)
 
 ## Examine Bivariate Relationship
 
+(Intersect the two time series)
 
+```{r}
+combined.raw = ts.intersect(unem.ts, auto.ts)
+
+unem.intersect.ts = combined.raw[,1]
+auto.intersect.ts = combined.raw[,2]
+
+head(combined.raw);tail(combined.raw)
+```
+
+```{r}
+par(mfrow = c(2,1))
+ts.plot(unem.intersect.ts, main = "",
+        ylab = "Unemployment Rate")
+title("Unemployment Rate")
+ts.plot(auto.intersect.ts, main = "",
+        ylab = "Auto Sales")
+title("Auto Sales")
+```
+
+(Auto sales lags behind unemployment rate 1-3 years except for the 2000s)
+
+```{r}
+# Function for scatterplot with Loess Curve and regression curve
+scatter.loess.lm.plot = function(y, x, xlab, ylab, title){
+  
+  plot(x = x, y = y, xlab = xlab, ylab = ylab)
+  title(title)
+  
+  abline(lm(y~x), col = "green", lty = "dotted")
+  
+  order.pred = order(x)
+  smooth.stand = loess(formula = y~x, 
+                       weights = rep(1,length(x)))
+  lines(x = x[order.pred],
+        y = predict(smooth.stand)[order.pred],
+        lty = "solid", col = "red")
+  
+  legend("topright", 
+         legend = c("regression line", "Loess curve"),
+         col = c("green", "red"), 
+         lty = "dotted", "solid", bty = "n")
+}
+```
+
+
+```{r}
+scatter.loess.lm.plot(y = unem.intersect.ts,
+                      x = auto.intersect.ts,
+                      xlab = "Auto Sales",
+                      ylab = "Unemployment",
+                      title = "Unemployment vs Autosales")
+```
+
+```{r}
+cat("Corr(Unemployment, Autosales):", cor(auto.intersect.ts,unem.intersect.ts))
+```
+
+(Disregard values change according to time, the two values have a moderate -ve correlation )
+(Relationship is possibly non-linear)
+
+```{r}
+scatter.loess.lm.plot(y = as.vector(aggregate(unem.intersect.ts)),
+                      x = as.vector(aggregate(auto.intersect.ts)),
+                      xlab = "Annual Auto Sales",
+                      ylab = "Annual Unemployment",
+                      title = "Annual Unemployment vs Annual Autosales")
+```
+
+```{r}
+# cbind(aggregate(unem.intersect.ts), aggregate(auto.intersect.ts))
+cat("Corr(Annual Unemployment, Annual Autosales):", cor(aggregate(auto.intersect.ts),aggregate(unem.intersect.ts)))
+```
+
+(Annual, aggregated series have stronger correlation)
+(Less non-linear than the monthly series. Elimination of seasons make overall trend correlation clearer but lost the granularity. we can say much about monthly lags of one series on another now.)
+
+
+## Examine cross-correlation
+
+- Scatter Plots with lags
+
+CCF Plots here
+
+```{r}
+astsa::lag2.plot(auto.intersect.ts, unem.intersect.ts,16)
+```
+
+
+```{r}
+ccf(auto.intersect.ts, unem.intersect.ts, main = "")
+```
+
+
+
+```{r}
+po.test(cbind(auto.intersect.ts, unem.intersect.ts))
+```
+
+```{r}
+unem.auto.lm = lm(unem.intersect.ts~auto.intersect.ts)
+summary(unem.auto.lm)
+```
+
+```{r}
+library(car)
+car::residualPlot(unem.auto.lm)
+```
+
+```{r}
+par(mfrow = c(3,1))
+ts.plot(unem.intersect.ts, main = "",
+        ylab = "Unemployment Rate")
+title("Unemployment Rate")
+ts.plot(auto.intersect.ts, main = "",
+        ylab = "Auto Sales")
+title("Auto Sales")
+unem.auto.lm.res = resid(unem.auto.lm)
+plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
+     lty = 1, pch = 1, type = "l")
+title("Residuals from the Linear Regression of Unemployment Rate on Auto Sales")
+```
+
+```{r}
+unem.auto.lm.res = resid(unem.auto.lm)
+plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
+     lty = 1, pch = 1, type = "l")
+title("Residuals from the Linear Regression of Unemployment Rate on Auto Sales")
+```
+
+(The residual series is clearly time-dependent and still picks up the trend in the unemployment rate)
+(Evidence for existence of linear combination bewtween the two series is not strong)
+
+(Unlikely that auto , or lags of auto can effectively explain variations in unem. but the other way round may better)
