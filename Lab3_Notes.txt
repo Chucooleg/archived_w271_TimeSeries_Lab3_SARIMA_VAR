@@ -3,25 +3,56 @@ EDA
 
 1. Data Overview (DONE)
 unem has 336 more obs than auto
+
 2. Time Series Overview
+
 ### Time plots and Histograms
 unem.ts : persistency, unusual spikes (due to recession)
-auto.ts : less persistent than unem. stronger seasonal jots 
+auto.ts : less persistent than unem. stronger seasonal jots. two plunges corresponding to unem.ts recessions. spike in 1986 due to oil prices drop
 
 
-### Make into TS and plot
-
-### Make into histogram
-
-### Smoothing
-
-- MA filter, Kernel Smmo
-
-- Identify Trend
-
-### Decompose 
+(persistent)
+(clear outlier, examine) (continuous from persistent trend not errorneous, correspond to the early 1980s recession in the US which ended in November 1982). second peak correspond to the Great recession which officially lasted from Dec 2007 - June 2009)
 
 
+From the above time plot of unemployment, we see clear persistency of the observations. That is, when observations are above or below the mean, they tend to stay so for a while. The overall trend seem to climb slowly upward. There are a noticeable number of observations lying 2.5 standard deviations above the mean, which is made obvious in the right skewed histogram as well. We isolated these observations, the 6 in 1982 and 1983 probably correspond to the early 1980s recessions which officially ended in November 1982. The 3 in 2010 probably correspond to the late 2000s recession which officially ended in June 2009.
+
+(A Sharp Spike in 1980s)
+(less persistent than employment rate)
+(two plunges in the early 1980s and 2009 respond to recessions)
+(one spike in 1986 due to oil prices plunged in more than half that year)
+
+From the above time plot of auto sales, we see some but weaker persistency than the unemployment series. The overall trend doesn't seem to climb upward or downward. There are more noticeable seasonal patterns than the unemployment series. The histogram is more symmetric and normal. Less than 1.5% observations lie 2 standard deviations above the mean and less than 2.5% observations lie 2 standard deviations below the mean.  We isolated 
+these observations, the 5 in 1982 and 1983 and the 5 in 2008 and 2009 probably correspond to the two aforementioned recessions. Notice that these recession related observations in auto sales tend to happen a few months before those in unemployment. There is an unusual spike in 1986, probably attributed to oil prices dropping in half that year.
+
+
+### Smoothing and Decomposition
+
+Unem MA and kernel:
+
+The asymmetric moving average filters above average over the past 6 months, 12 months and 4 years. The symmetric kernel smoothers attempted 3 bandwidths. In either case, the smoothed series resemble behavior of random walks with drift, evidence by the gradually widened variance and slowly increasing mean towards the right. Formulation for the two smoothers are given here:
+
+Unem Decomposition :
+
+The decomposed trend series resembles that of the moving average and kernel filters. Here the growing variance of the trend is more noticeable, as well as the gradual upward trend. A regular, annual seasonality series was isolated out from the raw series. The random component series is clearly non-stationary. Its variance diminishes over time featured by dramatic spikes before 1965. Clearly, an OLS model would not be the right choice, we should not disregard the non-stationary trend and random components.
+
+Auto MA and kernel:
+
+Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior. It resembles less of a random walk and drift is not entirely apparent. Seasonally pattern is also stronger. Below, we plotted the two series at the same time interval and kernel bandwidth for direct comparison.
+
+Auto Decomposition :
+
+
+
+(Decomposition Assumption, Findings of Noise of Inconsistent Variance)
+(Trend is sloght upward trend, doesn't look like a random walk. Compared to unemployment it is more stable)
+(Seasonality seem regular)
+(Noise is clearly not stationary)
+(We cannot use regression mode)
+
+
+
+Auto Decomposition :
 
 
 ## Establish Stationarity

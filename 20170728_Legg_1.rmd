@@ -101,9 +101,17 @@ legend("topright", c("Mean","Standard Deviations", "Median"),
 unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) + 2.5*sd(unem.data$UNRATENSA),]
 ```
 
+```{r}
+# precentage of observations beyond 2, 2.5 and 3 sd
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) 
+               + 2*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) 
+               + 2.5*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA)
+               + 3*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+```
 
-(persistent)
-(clear outlier, examine) (continuous from persistent trend not errorneous, correspond to the early 1980s recession in the US which ended in November 1982). second peak correspond to the Great recession which officially lasted from Dec 2007 - June 2009)
+From the above time plot of unemployment, we see clear persistency of the observations. That is, when observations are above or below the mean, they tend to stay so for a while. The overall trend seem to climb slowly upward. Almost 5% of the observations lie 2 standard deviations above the mean, which is made obvious in the right skewed histogram as well. We isolated these observations, the 6 in 1982 and 1983 probably correspond to the early 1980s recessions which officially ended in November 1982. The 3 in 2010 probably correspond to the late 2000s recession which officially ended in June 2009.
 
 ```{r}
 ts.plot(auto.ts); title("Auto Sales 1976-01 to 2017-06")
@@ -153,10 +161,18 @@ auto.data[auto.data$TOTALNSA < mean(auto.data$TOTALNSA) - 2*sd(auto.data$TOTALNS
 head(auto.data[auto.data$TOTALNSA > mean(auto.data$TOTALNSA) + 2*sd(auto.data$TOTALNSA),],1)
 ```
 
-(A Sharp Spike in 1980s)
-(less persistent than employment rate)
-(two plunges in the early 1980s and 2009 respond to recessions)
-(one spike in 1986 due to oil prices plunged in more than half that year)
+```{r}
+# precentage of observations beyond 2 sd
+nrow(auto.data[auto.data$TOTALNSA > mean(auto.data$TOTALNSA) 
+               + 2*sd(auto.data$TOTALNSA),])/nrow(auto.data)
+
+nrow(auto.data[auto.data$TOTALNSA < mean(auto.data$TOTALNSA) 
+               - 2*sd(auto.data$TOTALNSA),])/nrow(auto.data)
+
+```
+
+From the above time plot of auto sales, we see some but weaker persistency than the unemployment series. The overall trend doesn't seem to climb upward or downward. There are more noticeable seasonal patterns than the unemployment series. The histogram is more symmetric and normal. Less than 1.5% observations lie 2 standard deviations above the mean and less than 2.5% observations lie 2 standard deviations below the mean.  We isolated 
+these observations, the 5 in 1982 and 1983 and the 5 in 2008 and 2009 probably correspond to the two aforementioned recessions. Notice that these recession related observations in auto sales tend to happen a few months before those in unemployment. There is an unusual spike in 1986, probably attributed to oil prices dropping in half that year.
 
 ```{r}
 summary(unem.data$UNRATENSA)
@@ -164,7 +180,24 @@ summary(auto.data$TOTALNSA)
 moments::kurtosis(unem.data$UNRATENSA)
 ```
 
-### Trend Examination with Smoothers and Decomposition
+### Trend Examination with Smoothers and Decomposition - Unemployment
+
+In this section, we apply smoothers and decomposition to gain some initial insights about the overall trend, seasonality and noise behavior of both series.
+
+```{r}
+# Moving Average Filter
+unem.ma.smooth.4year = filter(unem.ts, sides = 1, rep(1/48, 48))
+unem.ma.smooth.annual = filter(unem.ts, sides = 1, rep(1/12, 12))
+unem.ma.smooth.halfyear = filter(unem.ts, sides = 1, rep(1/6, 6))
+
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Moving Average Filtered")
+lines(unem.ma.smooth.4year, col = "magenta")
+lines(unem.ma.smooth.annual, col = "red")
+lines(unem.ma.smooth.halfyear, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+```
 
 ```{r}
 # Kernel smoothing
@@ -189,32 +222,100 @@ lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
 abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
 ```
 
-```{r}
-# Moving Average Filter
-unem.ma.smooth.4year = filter(unem.ts, sides = 1, rep(1/60, 60))
-unem.ma.smooth.annual = filter(unem.ts, sides = 1, rep(1/12, 12))
-unem.ma.smooth.halfyear = filter(unem.ts, sides = 1, rep(1/6, 6))
+The asymmetric moving average filters above average over the past 6 months, 12 months and 4 years. The symmetric kernel smoothers attempted 3 bandwidths. In either case, the smoothed series resemble behavior of random walks with drift, evidence by the gradually widened variance and slowly increasing mean towards the right. Formulation for the two smoothers are given here:
 
-# Make plot
-plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
-     main = "Unemployment Rate - Moving Average Filtered")
-lines(unem.ma.smooth.4year, col = "magenta")
-lines(unem.ma.smooth.annual, col = "red")
-lines(unem.ma.smooth.halfyear, col = "blue")
-abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
-```
+  - One-sided Moving Average Smoother
+
+$$m_t = \frac{1}{n+1} \sum_{j = 0}^{n}x_{t-j}$$
+
+where $m_t$ refers to the trend we hope to study, $x_t$ is the raw series, $n$ is the number of past months to include in the averaging.
+
+  - Symmertic Kernel Smoother (symmetric moving average smoother with probability density weight function applied)
+
+$$m_t = \sum_{i=1}^{n}w_i(t)x_{t_i}$$
+
+where density weight function $w_i(t)$ is a function of the kernel function and  $w_i(t) = K(\frac{t-t_i}{b}) / \sum_{j=1}^{n} K(\frac{t-t_j}{b})$. $b$ is the bandwidth which we manipulate. The blue kernel curve used $b=0.5$ to correspond approximately smoothing over about half a year. The smoother curves were generated using higher bandwidth.
 
 ```{r}
 plot(decompose(unem.ts, type = "additive"))
 ```
 
-(Decomposition Assumption, Findings of Noise of Inconsistent Variance)
-(Trend clearly not stationary --> growing variance. can be random walk with mild drift)
-(Seasonality seem regular)
-(Noise is clearly not stationary)
-(We cannot use regression mode)
+The decomposed trend series resembles that of the moving average and kernel filters. Here the growing variance of the trend is more noticeable, as well as the gradual upward trend. A regular, annual seasonality series was isolated out from the raw series. The random component series is clearly non-stationary. Its variance diminishes over time featured by dramatic spikes before 1965. Clearly, an OLS model would not be the right choice, we should not disregard the non-stationary trend and random components.
+
+The techniques assumes that the raw series is composed of a clear trend, seasonality and random component. The model imposed is:
+
+$$X_t = M_t + S_t + N_t$$
+
+where $X_t$ is the raw series, $M_t$ is the trend, $S_t$ is the seasonal component and $N_t$ is the random component.
+
+
+### Trend Examination with Smoothers and Decomposition - Unemployment
 
 ```{r}
+# Moving Average Filter
+auto.ma.smooth.4year = filter(auto.ts, sides = 1, rep(1/60, 60))
+auto.ma.smooth.annual = filter(auto.ts, sides = 1, rep(1/12, 12))
+auto.ma.smooth.halfyear = filter(auto.ts, sides = 1, rep(1/6, 6))
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Car Sales",
+     main = "Car Sales - Moving Average Filtered")
+lines(auto.ma.smooth.4year, col = "magenta")
+lines(auto.ma.smooth.annual, col = "red")
+lines(auto.ma.smooth.halfyear, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+```
+
+```{r}
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 1)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
+     main = "Car Sales - Kernel Smoothed")
+lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+```
+
+```{r}
+combined.raw = ts.intersect(unem.ts, auto.ts)
+unem.intersect.ts = combined.raw[,1]
+
+par(mfrow = c(2,1))
+
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
+                               unem.intersect.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+
 # Kernel smoothing
 auto.k.smooth.widest = ksmooth(time(auto.ts), 
                              auto.ts, kernel = c("normal"), 
@@ -237,20 +338,7 @@ lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
 abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
-```{r}
-# Moving Average Filter
-auto.ma.smooth.4year = filter(auto.ts, sides = 1, rep(1/60, 60))
-auto.ma.smooth.annual = filter(auto.ts, sides = 1, rep(1/12, 12))
-auto.ma.smooth.halfyear = filter(auto.ts, sides = 1, rep(1/6, 6))
-
-# Make plot
-plot(auto.ts, col = "gray", ylab = "Car Sales",
-     main = "Car Sales - Moving Average Filtered")
-lines(auto.ma.smooth.4year, col = "magenta")
-lines(auto.ma.smooth.annual, col = "red")
-lines(auto.ma.smooth.halfyear, col = "blue")
-abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
-```
+Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior. It resembles less of a random walk and drift is not entirely apparent. Seasonally pattern is also stronger. We plotted the two series at the same time interval and kernel bandwidth for direct comparison.
 
 ```{r}
 plot(decompose(auto.ts, type = "additive"))
@@ -506,9 +594,9 @@ Possible Model SARIMA(11,1,q)(1,0,Q)
 (Intersect the two time series)
 
 ```{r}
-combined.raw = ts.intersect(unem.ts, auto.ts)
-
-unem.intersect.ts = combined.raw[,1]
+# Intersect the series
+#combined.raw = ts.intersect(unem.ts, auto.ts)
+#unem.intersect.ts = combined.raw[,1]
 auto.intersect.ts = combined.raw[,2]
 
 head(combined.raw);tail(combined.raw)
