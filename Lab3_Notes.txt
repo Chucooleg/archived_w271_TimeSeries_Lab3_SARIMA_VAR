@@ -252,13 +252,10 @@ W10 Live Notes --> Why SARIMA may be better than VAR.
 
 Take away
 
-
-
-
 How to VAR?
 auto clearly lags behind unem --> doesn't make much sense to use auto info
 don't strongly suggest unit root in both TS
 cointegration test yes
 but regressing unem on auto is not informative, residuals behavior are poor. linear combo is not strong
 
-
+Bivariate investigation conclusion
