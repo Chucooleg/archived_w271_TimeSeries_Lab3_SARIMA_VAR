@@ -265,32 +265,6 @@ abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
 ```{r}
-combined.raw = ts.intersect(unem.ts, auto.ts)
-unem.intersect.ts = combined.raw[,1]
-
-par(mfrow = c(2,1))
-
-# Kernel smoothing
-unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
-                             unem.intersect.ts, kernel = c("normal"), 
-                             bandwidth = 10)
-
-unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
-                             unem.intersect.ts, kernel = c("normal"), 
-                             bandwidth = 4)
-
-unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
-                               unem.intersect.ts, kernel = c("normal"), 
-                               bandwidth = 0.5)
-
-# Make plot
-plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
-     main = "Unemployment Rate - Kernel Smoothed")
-lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
-lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
-lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
-abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
-
 # Kernel smoothing
 auto.k.smooth.widest = ksmooth(time(auto.ts), 
                              auto.ts, kernel = c("normal"), 
@@ -313,7 +287,7 @@ lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
 abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
-Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior, and appear to be relatively stable between the two aforementioned recessions in early 1980s and late 2000s. It resembles less of a random walk and drift is not entirely apparent. Seasonal pattern is also stronger. Below, we plotted the two series at the same time interval and kernel bandwidth for direct comparison.
+Compared to the unemployment series, the auto sale series exhibit less downhill-uphill-downhill behavior, and appear to be relatively stable between the two aforementioned recessions in early 1980s and late 2000s. It resembles less of a random walk and drift is not entirely apparent. Seasonal pattern is also stronger.
 
 ```{r}
 plot(decompose(auto.ts, type = "additive"))
@@ -546,12 +520,12 @@ Auto sales series stationarity conclusion: The month plot, scatterplot matrix an
 
 ## Examine Bivariate Relationship
 
-(Intersect the two time series)
+### Overview and cross-correlation
 
 ```{r}
 # Intersect the series
-#combined.raw = ts.intersect(unem.ts, auto.ts)
-#unem.intersect.ts = combined.raw[,1]
+combined.raw = ts.intersect(unem.ts, auto.ts)
+unem.intersect.ts = combined.raw[,1]
 auto.intersect.ts = combined.raw[,2]
 
 head(combined.raw);tail(combined.raw)
@@ -559,15 +533,49 @@ head(combined.raw);tail(combined.raw)
 
 ```{r}
 par(mfrow = c(2,1))
-ts.plot(unem.intersect.ts, main = "",
-        ylab = "Unemployment Rate")
-title("Unemployment Rate")
-ts.plot(auto.intersect.ts, main = "",
-        ylab = "Auto Sales")
-title("Auto Sales")
+
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
+                               unem.intersect.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.intersect.ts~time(unem.intersect.ts)), lty = "dotted", col = "black")
+
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
+     main = "Car Sales - Kernel Smoothed")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```
 
-(Auto sales lags behind unemployment rate 1-3 years except for the 2000s)
+It appears that between 1976 to early 1990s and between late 2000s and 2017, a crest in auto sales would be echoed with a trough in unemployment rate a few months later and a trough in auto sales would be echoed by a crest in unemployment rate a few months later. The unemployment series has a slight downward trend over the whole time interval while the opposite is true for auto sales.
 
 ```{r}
 # Function for scatterplot with Loess Curve and regression curve
@@ -592,23 +600,15 @@ scatter.loess.lm.plot = function(y, x, xlab, ylab, title){
 }
 ```
 
-
 ```{r}
+par(mfrow = c(1,2))
+
 scatter.loess.lm.plot(y = unem.intersect.ts,
                       x = auto.intersect.ts,
                       xlab = "Auto Sales",
                       ylab = "Unemployment",
                       title = "Unemployment vs Autosales")
-```
 
-```{r}
-cat("Corr(Unemployment, Autosales):", cor(auto.intersect.ts,unem.intersect.ts))
-```
-
-(Disregard values change according to time, the two values have a moderate -ve correlation )
-(Relationship is possibly non-linear)
-
-```{r}
 scatter.loess.lm.plot(y = as.vector(aggregate(unem.intersect.ts)),
                       x = as.vector(aggregate(auto.intersect.ts)),
                       xlab = "Annual Auto Sales",
@@ -617,87 +617,77 @@ scatter.loess.lm.plot(y = as.vector(aggregate(unem.intersect.ts)),
 ```
 
 ```{r}
-# cbind(aggregate(unem.intersect.ts), aggregate(auto.intersect.ts))
+cat("Corr(Unemployment, Autosales):", cor(auto.intersect.ts,unem.intersect.ts))
 cat("Corr(Annual Unemployment, Annual Autosales):", cor(aggregate(auto.intersect.ts),aggregate(unem.intersect.ts)))
 ```
 
-(Annual, aggregated series have stronger correlation)
-(Less non-linear than the monthly series. Elimination of seasons make overall trend correlation clearer but also lost the non-linear relationship coming from the different seasonalities between the series)
-
-
-## Examine cross-correlation
-
-- Scatter Plots with lags
-
-CCF Plots here
+Disregarding time-dependent variations, the two series show some non-linear relationship in addition to overall negative correlation. The annually aggregated series show stronger and more linear correlation. It seems that elimination of seasonal granularity may "hide" otherwise non-linear relationships, which can be depicted by the scatterplot matrix below. Correlation of unemployment series against auto sales series remains moderate for more than 12 lags, and it peaks at lag 5 and 6. 
 
 ```{r}
-astsa::lag2.plot(auto.intersect.ts, unem.intersect.ts,16)
+astsa::lag2.plot(auto.intersect.ts, unem.intersect.ts,15)
 ```
-
-(The correlation with high order lags are still mildly non-linear)
-(it says that behavior of unemployment rate may be different for high auto sales vs low auto sales)
 
 ```{r}
-astsa::lag2.plot(unem.intersect.ts, auto.intersect.ts,12)
+#par(mfrow = c(3,1))
+#acf( unem.intersect.ts, lag.max = 61, main = "")
+#title("Unemployment")
+#acf(auto.intersect.ts, lag.max = 61, main = "")
+#title("Auto Sales")
+ccf(auto.intersect.ts, unem.intersect.ts, main = "", 
+    lag.max = 61, xaxt = "n")
+axis(side = 1, at = seq(-5,5,0.5))
+title("Auto sales vs Unemployment")
 ```
 
-(on the other hand, the ccf matrices of auto sales against unem makes better sense, and the relationship seem quite linear and intuitive. strongest at lag 1)
+The ccf plot above assess the cross-correlation $\hat{\rho}_{xy}(h) = \frac{\hat{\gamma}_{xy}(h)}{\sqrt{\hat{\gamma}_x(0)\hat{\gamma}_y(0)}}$ based on the cross-covariance function $\hat{\gamma}_{xy}(h) = n^{-1}\sum_{t = 1}^{n-h}(x_{t+h} - \bar{x})(y_t - \bar{y})$, where $x_t$ refers to the auto sales series, $y_t$ refers to the unemployment series, $h$ refers to the number of lags in the auto sales series and $n$ refers to the number of monthly observations considered. The ccf occurs mostly at the negative lags and peaks somewhere at lag 5 to 6, this indicate that auto sales series clearly leads the unemployment series.
 
 
-```{r}
-ccf(auto.intersect.ts, unem.intersect.ts, main = "")
-```
+### Testing for cointegration
 
-(CCF strongest at -ve lags of unem and lag 0 of auto)
-(auto sales lags behind)
+Based on the unit root test results conducted in the univariate section and the moderate, negative linear correlation observed just above. There is some chance that our two series is cointegrated. We conduct the Phillips-Ouliaris Cointegration Test here with the null hypothesis: 
+
+  - Ho: The two series are not cointegrated
+  - Ha: the two series are cointegrated
+  
+  - The po.test results provides evidence that the series are cointegrated since the null hypothesis is rejected at the 1% level.
 
 ```{r}
 tseries::po.test(cbind(auto.intersect.ts, unem.intersect.ts))
 ```
 
+If there truely exists a linear combination between the two series that is stationary, regressing unemployment series on auto sales should produce residuals that are some what stationary(though it can still be time dependent). We conduct such a model below to examine the residual series.
+
 ```{r}
 unem.auto.lm = lm(unem.intersect.ts~auto.intersect.ts)
-summary(unem.auto.lm)
+#summary(unem.auto.lm)
+unem.auto.lm$coefficients[2]
+as.numeric(unem.auto.lm$coefficients[2]/sd(unem.intersect.ts))
 ```
 
 ```{r}
-library(car)
 car::residualPlot(unem.auto.lm)
 ```
 
-(strong curvature. first order auto doesn't effectively explain variations in unem)
+From the regression output above, the coefficient estimate for autosales is not practically significant(less than 1% standard deviation of unemployment rate). The residual plot also show strong curvature. Atuosales at lag 0 doesn't effectively explain variations in unemployment in expectation.
 
 ```{r}
-par(mfrow = c(3,1))
+par(mfrow = c(2,1))
 ts.plot(unem.intersect.ts, main = "",
         ylab = "Unemployment Rate")
 title("Unemployment Rate")
-ts.plot(auto.intersect.ts, main = "",
-        ylab = "Auto Sales")
-title("Auto Sales")
 unem.auto.lm.res = resid(unem.auto.lm)
 plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
      lty = 1, pch = 1, type = "l")
-title("Residuals from the Linear Regression of Unemployment Rate on Auto Sales")
-```
-
-```{r}
-unem.auto.lm.res = resid(unem.auto.lm)
-plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
-     lty = 1, pch = 1, type = "l")
-title("Residuals from the Linear Regression of Unemployment Rate on Auto Sales")
+title("Residual Series Unemployment ~ Auto Sales")
 ```
 
 ```{r}
 par(mfrow = c(2,1))
-acf(unem.auto.lm.res,61)
-pacf(unem.auto.lm.res,61)
+acf(unem.auto.lm.res,61, main = "")
+pacf(unem.auto.lm.res,61, main = "")
 ```
 
+From the time plots and acf plots, the residual series is clearly time-dependent and still picks up most of the random walk behaviors in the unemployment rate. The acf and pacf plots still show evidence of a strong AR(1) process. Contradicting the cointegration test results, these residual plots don't fully support the existence of linear combination between the two series that is entirely stationary. A VAR model is probably more appropriate than cointegration specific models, like VECM.
 
-(The residual series is clearly time-dependent and still picks up the trend in the unemployment rate)
-(acf and pacf still looks seasonal and persistent)
-(Evidence for existence of linear combination bewtween the two series is not strong)
+## EDA Conclusion
 
-(Unlikely that auto , or lags of auto can effectively explain variations in unem. but the other way round may better)

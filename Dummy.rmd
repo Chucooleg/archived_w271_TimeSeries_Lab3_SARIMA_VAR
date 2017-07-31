@@ -10,38 +10,132 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-theta = c(rep(0,11),.9)
-phi = 0
-  
-ACF = ARMAacf(ar=phi, ma=theta, 100)
-PACF = ARMAacf(ar=phi, ma=theta, 100, pacf=TRUE)
+par(mfrow = c(3,1))
 
-plot(ACF, type="h", xlab="lag", ylim=c(-.1,1))
-abline(h=0)
-plot(PACF, type="h", xlab="lag", ylim=c(-.1,1))
-abline(h=0)
+ts.plot(auto.ts)
+abline(lm(auto.ts ~ time(auto.ts)))
+
+ts.plot(auto.ts.diff12)
+abline(lm(auto.ts.diff12 ~ time(auto.ts.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff12), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) + 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) - 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("Seasonally Differenced - Auto Sales")
+
+ts.plot(auto.ts.diff)
+abline(lm(auto.ts.diff ~ time(auto.ts.diff)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) + 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) - 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First Differenced - Auto Sales")
 ```
 
 ```{r}
-# Simulate
-phi = c(rep(0,11),.9)
-sAR = arima.sim(list(order = c(12,0,0), 
-                     ar = phi
-                     #, ma = theta
-                     ), n = 500)
-sAR = ts(sAR, freq = 12)
-acf(sAR, lag.max = 49)
-pacf(sAR, lag.max = 49)
+par(mfrow = c(2,1))
+acf(unem.ts.diff12, lag.max = 61, main = "")
+title("ACF Seasonally Diffenced Unemployment Rate")
+pacf(unem.ts.diff12, lag.max = 61, main = "")
+title("PACF Seasonally Diffenced Unemployment Rate")
 ```
 
 ```{r}
-# Simulate
-theta = c(rep(0,12),-.8)
-sAR = arima.sim(list(order = c(0,0,13), 
-                     #ar = phi
-                     ma = theta
-                     ), n = 500)
-sAR = ts(sAR, freq = 12)
-acf(sAR, lag.max = 49)
-pacf(sAR, lag.max = 49)
+par(mfrow = c(2,1))
+acf(auto.ts.diff12, lag.max = 61, main = "")
+title("ACF for Seasonally Differenced Autosales")
+pacf(auto.ts.diff12, lag.max = 61, main = "")
+title("PACF for Seasonally Differenced Autosales")
+```
+
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 720, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 720, main = "")
+title("PACF First Diffenced Unemployment Rate")
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts.diff, lag.max = 720, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 720, main = "")
+title("PACF First Difference Auto Sales")
+```
+
+
+```{r}
+par(mfrow = c(2,1))
+acf(auto.ts.diff, lag.max = 61, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 61, main = "")
+title("PACF First Difference Auto Sales")
+```
+
+```{r}
+par(mfrow = c(2,1))
+acf(unem.ts.diff, lag.max = 61, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 61, main = "")
+title("PACF First Diffenced Unemployment Rate")
+```
+
+
+```{r}
+combined.raw = ts.intersect(unem.ts, auto.ts)
+unem.intersect.ts = combined.raw[,1]
+
+par(mfrow = c(2,1))
+
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
+                               unem.intersect.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
+     main = "Car Sales - Kernel Smoothed")
+lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
 ```

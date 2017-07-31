@@ -218,15 +218,23 @@ First Differencing? Identify if random walk or random walk with drift
 --------------------------------------------------------------------------------------------
 
 
+562
 
-
-## Examine Bivariate Relationship
+4. Examine Bivariate Relationship
 
 - intersect the two time series
 
-### ts Plot overlap two series
+### ts Plot overlap two series 580
 
-### Examiine ccf and ccd
+It appears that between 1976 to early 1990s and between late 2000s and 2017, a crest in auto sales would be echoed with a trough in unemployment rate a few months later and a trough in auto sales would be echoed by a crest in unemployment rate a few months later. The unemployment series has a slight downward trend over the whole time interval while the opposite is true for auto sales.
+
+### Scatterplot matrix 627
+
+Disregarding time-dependent variations, the two series show some non-linear relationship in addition to overall negative correlation. The annually aggregated series show stronger and more linear correlation. It seems that elimination of seasonal granularity may "hide" otherwise non-linear relationships, which can be depicted by the scatterplot matrix below. Correlation of unemployment series against auto sales series remains moderate for more than 12 lags, and it peaks at lag 5 and 6. 
+
+### ccf plot
+
+The ccf plot below assess the cross-correlation $$,
 
 ### Scatterplot matrix with each other
 
@@ -243,15 +251,6 @@ W10 Live Notes --> Why SARIMA may be better than VAR.
 -------------------------------------------------------------
 
 Take away
-
-
-
-both series exhibit some degrees of seasonal and random walk/long memory process behavior. 
-To estab seasonality
-Primary suggestion for unem is no seasonal difference, take unit root
-(ACF scatterplot matrix)(unit root test result)
-Primary suggestion for auto is take seasonal difference, don't take unit root
-(ACF scatterplot matrix)(unit root test result rejects in all cases)
 
 
 
