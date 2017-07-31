@@ -1,6 +1,6 @@
 ---
 title: "Lab3_Initial_Legg"
-author: "Legg (Ho Man) Yeung"
+author: "Sue Yang, Michelle Kim, Legg Yeung"
 date: "July 28, 2017"
 output: pdf_document
 html_document:
@@ -687,7 +687,8 @@ acf(unem.auto.lm.res,61, main = "")
 pacf(unem.auto.lm.res,61, main = "")
 ```
 
-From the time plots and acf plots, the residual series is clearly time-dependent and still picks up most of the random walk behaviors in the unemployment rate. The acf and pacf plots still show evidence of a strong AR(1) process. Contradicting the cointegration test results, these residual plots don't fully support the existence of linear combination between the two series that is entirely stationary. A VAR model is probably more appropriate than cointegration specific models, like VECM.
+From the time plots and acf plots, the residual series still picks up most of the random walk behaviors in the unemployment rate. The acf and pacf plots still show evidence of a strong AR(1) process. Contradicting the cointegration test results, these residual plots don't fully support the existence of linear combination between the two series that is entirely stationary. 
 
-## EDA Conclusion
+We conclude the bivariate investigation that there is clearly linear relationship between the unemployment and autosales, but the two are not necessarily cointegrated. A VAR model that regress unemployment on lags of auto sales is probably more appropriate than cointegration specific models, like VECM.
+
 
