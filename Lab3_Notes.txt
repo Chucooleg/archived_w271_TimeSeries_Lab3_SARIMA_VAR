@@ -1,5 +1,19 @@
-EDA
+To do Now:
 
+388 (do diff.diff12)
+
+(autosales diff.diff12)
+
+517 (redo auto sales conclusion)
+
+
+Unemployment series stationarity conclusion: Regarding first differencing, all of our plots and tests suggests strong random walk behavior with the raw series, so it is recommended. Regarding additional seasonal differencing, the results were contradictory. The monthly, acf and pacf plots suggest noticeable seasonal pattern, while the scatterplot matrix doesn't. The unit test suggested that either first or seasonal differencing can help us to establish a stationary series. At this stage, we remain open to a first differenced, or first differenced in additional to seasonally differenced model. We defer to the modeling and forecasting results to determine the best candidate.
+
+
+The monthly plot and autocorrelation plots exhibit seasonal behaviors
+
+
+EDA
 
 1. Data Overview (DONE)
 unem has 336 more obs than auto
@@ -26,7 +40,7 @@ From the above time plot of auto sales, we see some but weaker persistency than 
 these observations, the 5 in 1982 and 1983 and the 5 in 2008 and 2009 probably correspond to the two aforementioned recessions. Notice that these recession related observations in auto sales tend to happen a few months before those in unemployment. There is an unusual spike in 1986, probably attributed to oil prices dropping in half that year.
 
 
-### Smoothing and Decomposition
+### Smoothing and Decomposition 181
 
 Unem MA and kernel:
 
@@ -52,19 +66,19 @@ The trend component observed in the decomposed series concur with our intuitions
 
 
 
-3. Establish Stationarity
+3. Establish Stationarity 299
 
 
 ## Seasonality and Autocorrelation -- Unem
 
-month plot 332
+month plot 304
 
 (monthly plot shows higher values in the beginning and mid year)
 (can difference it in SARIMA, if linear regression should use dummy for Jan Feb and Jun July)
 
 The monthly plot show some seasonal pattern at the mean, but the range of unemployment variation for each month also overlap a lot with other months. So the seasonal pattern exists but is not very strong. We see that unemployment rate tend to be a little higher in the beginning and middle of each year followed by mild gradual decrease.
 
-scatterplot 338
+scatterplot 310
 
 (weak seasonality, probably no need for seasonal difference)
 (strongest correlation with first lag, then weaker and weaker lags)
@@ -75,7 +89,7 @@ The above scatterplot shows that the series is most correlated with its first la
 (strongest correlation with first lag, then weaker and weaker lags)
 
 
-acf, pacf 344
+acf, pacf 316
 
 (acf slow decay, random walk with drift)
 (some sign of seasonality -- note the local peak at lag 12, 24, 36, 48)
@@ -87,11 +101,11 @@ The acf shows slow decay from lag 0 coupled with a sharp drop of pacf after lag 
 
 Although there are some seasonal effects in the unemployment series, they don't seem strong enough to require seasonal differencing. To help us determine, we compare the seasonal differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
 
-(TS plot 1st diff, 12th diff) 385
+(TS plot 1st diff, 12th diff) 358
 
 The seasonally differenced series retained most of the random walk like behavior in the raw series and appear more persistent before mid 1980s. The first differenced series eliminated most random walk and persistent behaviors but variance is generally larger before 1980. There is still a slight downward trend (green regression line) with the seasonal differenced series. (red line refers to 2 standard deviation marks)
 
-(acf, pacf of 12th diff) 396
+(acf, pacf of 12th diff) 367
 
 (pacf sees sign lags 13, 25, 37 without much echo of graudal positive decay in acf --> seasonal MA(1) )
 (Seasonal Differencing may not be necessary --> Seasonal MA(1) can be a sign that we have over differenced the series)
@@ -100,7 +114,7 @@ The seasonally differenced series retained most of the random walk like behavior
 
 Above plots: In the seasonal differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, 37 as well. This suggest AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4, they can be AR(2-4) components but hard to tell at this stage. We may entertain the model as a SARIMA(4,0,q)(3,1,Q) using these plots.
 
-(acf, pacf of 1st diff) 406
+(acf, pacf of 1st diff) 373
 
 (long memory seasonal AR(1) and seasonal MA(1))
 (pacf show some significance lag 2-9 , without much echo in acf --> let loop figure it out)
@@ -108,9 +122,12 @@ possible SARIMA(9,1,q)(1,0,1)
 
 Above plots: In the first differenced series, the plots show much stronger periodic behavior, the extended plot show that acf tails off until lag 720, which suggest either a seasonal long memory or seasonal integrated process (both SAR(1)) in combination with some sesonal AR(2-4) components or in combination with a seasonal MA component. The pacf show some significance between lag 2-9 without a little echo in the acf lag 13-16, which can come from some MA processes but it's hard to say at this stage. We simply assume some ARMA processes present. We may entertain the model as a SARIMA(9,1,q)(4,0,Q) using these plots.
 
-Two possible transformations -- SARIMA(4,0,q)(P,1,1), SARIMA(9,1,q)(1,0,1), 
+(acf, pacf of 1st and 12th diff) 396
 
-Unit root tests 418
+Above plots: In the first and seasonal differenced series, the autocorrelation plots doesn't show an AR(1) component anymore, we still see a significant acf at lag 12 and significant decaying pacf at lag 12, 24, 36 and 48, which suggests a seasonal MA(1) process. At lag 2-4, the pacf are still significant with some echos in acf which suggests some AR(4) components. We simply assume some ARMA processes present. We may entertain the model as a SARIMA(4,1,0)(0,1,1) using these plots.
+
+
+Unit root tests 400
 
 We perform unit root tests below to check for stationarity. Augmented Dicky Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
 
@@ -122,26 +139,27 @@ As expected with the raw series, the ADF test failed to reject the null hypothes
 
 All the tests rejected the null hypothesis that the first differenced or seasonal differenced series contains a unit root and supports stationarity. We should not need to difference the raw series with both procedures.
 
-Unem Conclusion 434
+Unem Conclusion 418
 
-Unemployment series stationarity conclusion: The month plot, scatterplot matrix and autocorrelation plots suggest some but weak seasonality of our raw series, along with strong random walk behavior. The time plots, acf and pacf plots of the seasonal differenced series strongly suggest AR(1) process and that of the first differenced series strongly suggest seasonal AR(1) process. The unit root test suggested that we don't need to do both differencing. We may give slightly higher preference to a first differenced series with a long memory seasonal AR(1) component, but should still consider a seasonal differenced series as a candidate.
+Unemployment series stationarity conclusion: Regarding first differencing, all of our plots and tests suggests strong random walk behavior with the raw series, so it is recommended. Regarding additional seasonal differencing, the results were contradictory. The monthly, acf and pacf plots suggest noticeable seasonal pattern, while the scatterplot matrix doesn't. The unit test suggested that either first or seasonal differencing can help us to establish a stationary series. At this stage, we remain open to a first differenced, or first differenced in additional to seasonally differenced model. We defer to the modeling and forecasting results to determine the best candidate.
+
 
 
 ## Seasonality and Autocorrelation -- Auto
 
-Month Plot 450
+Month Plot 425
 
 (monthly plot shows more discrete values)
 
 Compared to that of unemployment rate, monthly plot of auto sales show much more discrete values in the mean. So the seasonal pattern is much stronger. We see that autosales tend to be noticeably lower in the first two months, picks up sharply in March, steps up and down for the rest of the year. Fall sales are generally lower than summer sales.
 
-Scatterplot 449 
+Scatterplot 431 
 
 (seasonality is much stronger. clearly correlated with lag 12)
 
 Scatterplot matrix of auto sales with its own lags display clear seasonal dependence. Autocorrelation is highest with lag 12, that is this month last year, even more so compared to lag 1. The opposite patterns was observed in the unemployment rates series, when autocorrelation is highest with lag 1 and then gradually declines towards higher lags.
 
-acf, pacf 456
+acf, pacf 438
 
 (acf slow decay but show clearn local maximum at lag 12, 24, 36 , 48)
 (pacf show sign at lag 1 and 12, AR(1) and SAR(1))
@@ -150,20 +168,11 @@ Similar to the unemployment series, the acf shows slow decay from lag 0, a sharp
 
 Based strong seasonal pattern in the above three plots, seasonal differencing would be useful in achieving stationarity. To help us determine, we again compare the seasonal differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
 
-TS plots (diff 1 diff 12) 462 
+TS plots (diff 1 diff 12) 479 
 
 The seasonally differenced series noticeably removed the strong seasonal patterns and some degree of persistency from the raw series. The first differenced series removed most persistencies from the raw series but appear clustered regularly at seasonally intervals. Both series removed the upward trend in the raw series effectively.
 
-(acf, pacf of 12th diff) 498
-
-(pacf sees sign lags 13, 25, 37 without much echo of graudal positive decay in acf --> seasonal MA(1) )
-(Seasonal Differencing may not be necessary --> Seasonal MA(1) can be a sign that we have over differenced the series)
-(pacf sharp drop lag 1, echoed by acf gradual drop from lag 1, AR(1))
-(pacf some sign lags 2-4, can be AR(2-4) components, hard to tell from acf, let model loop judge)
-
-
-Above plots: In the seasonal differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, 37 as well. This suggests an AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4, they can be AR(2-4) components but hard to tell at this stage. We may entertain the model as a SARIMA(4,0,q)(3,1,Q) using these plots.
-
+(acf, pacf of 12th diff) 489
 
 (pacf Still see -ve autocorrelation on Lag 1,2 and 3, acf after lag 3 shows gradual decay --> can be seasonal AR(3))
 (pacf still see sharp drop at lag 1 and acf still see graudual decay from lag 1)
@@ -171,18 +180,23 @@ Above plots: In the seasonal differenced series, we still see a significant pacf
 
 Above plots: Similar to unmployment rate, in the seasonal differenced serie of auto sales, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lag 12, 24 and 36. This suggests an AR(1) process in combination with seasonal AR(3). Also notice a few significant pacfs at lags 2-4. We may entertain the model as a SARIMA(4,0,q)(3,1,Q) using these plots.
 
+(acf, pacf of 1st diff) 543
+
+Above plots: Similar to unmployment rate, in the first differenced serie of auto sales, the acf tails off very slowly until lag 360. Unlike that of the unemployment series, the seasonal ripples on the acf appear much stronger. This plots suggest a strong seasonal AR(1) component and some AR(p) components before lag 12. 
+
+(acf, pacf of 1st 12th diff) 520
+
+Above plots: In the first and seasonal differenced series, the autocorrelation plots doesn't show an AR(1) component anymore, we still see significant acf and pacf around lag 12, 24, 36, which indicate some seasonal ARMA components. We also see a significant acf at lag 1 echoed by some significant pacf which indicate an MA(1) component. We may entertain the model as a SARIMA(1,1,0)(P,1,Q) using these plots. Notice that the occurence of MA components could come from over-differencing the raw series. But if our goal is to produce better forecast rather than estimating a random component detrended from the raw series, first in additional to seasonal differencing is still acceptable.
 
 Unit root tests 511
 
 We perform unit root tests below to check for stationarity again. Augmented Dicky Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
 
+All tests rejected the null hypotheses for all four series. Notice that the ADF test p-value for the raw series is closer to the critical cut off of 0.05. There can be a very weak chance that the raw series contains a unit root. We examine the first difference series.
 
-(acf, pacf of 1st diff) 543
+Auto stationarity conclusion 542
 
-Above plots: Similar to unmployment rate, in the first differenced serie of auto sales, the acf tails off very slowly until lag 360. Unlike that of the unemployment series, the seasonal ripples on the acf appear much stronger. This plots suggest a strong seasonal AR(1) component and some AR(p) components before lag 12. 
-
-Auto sales series stationarity conclusion: The month plot, scatterplot matrix and autocorrelation plots suggest strong seasonality of our raw series. The time plots, acf and pacf plots of the seasonal differenced series suggest an AR(1) component and that of the first differenced series suggests a strong seasonal AR(1) process. The unit root tests suggest that we don't need to do first or both differencing. We may give higher preference to a seasonal differenced series with an AR(1) component, but may still entertain a first differenced series as a candidate.
-
+Auto sales series stationarity conclusion: Regarding seasonal differencing, all of our plots suggests strong seasonal patterns in the raw series, so it is recommended. Regarding first differencing, our raw series and seasonally difference series both show noticeable AR(1) behavior and the unit test only weakly reject the null hypothesis of stationarity. At this stage, we remain open to a seasonal difference, or first differenced in addition to seasonal differenced model. Again, we defer to the modeling and forecasting results to determine the best candidate.
 
 
 
