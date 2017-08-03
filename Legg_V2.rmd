@@ -369,7 +369,7 @@ pacf(unem.ts.diff12, lag.max = 61, main = "")
 title("PACF Seasonally Diffenced Unemployment Rate")
 ```
 
-Above plots: In the seasonal differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, 37 as well. This suggests an AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4, they can be AR(2-4) components but hard to tell at this stage. We may entertain the model is SARIMA(4,0,q)(3,1,Q) from these plots.
+Above plots: In the seasonal differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, 37 as well. This suggests an AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4, they can be AR(2-4) components but hard to tell at this stage. We may entertain the model is SARIMA(4,0,q)(3,1,Q) from these plots, where Q is undertermined yet.
 
 ```{r}
 par(mfrow = c(2,1))
@@ -387,7 +387,7 @@ pacf(unem.ts.diff, lag.max = 720, main = "")
 title("PACF First Diffenced Unemployment Rate")
 ```
 
-Above plots: In the first differenced series, the plots show periodic behavior, the extended plot show that acf tails off until lag 720, which suggest either a seasonal long memory or seasonal integrated process (both SAR(1)) in combination with a sesonal MA(1) or in combination with some seasonal AR(2-4) components. The pacf show some significance between lag 2-9 without a little echo in the acf lag 13-16, which can come from some MA processes but it's hard to say at this stage. We simply assume some ARMA processes present. We may entertain the model as a SARIMA(9,1,q)(1,0,1) using these plots.
+Above plots: In the first differenced series, the plots show periodic behavior, the extended plot show that acf tails off until lag 720, which suggest either a seasonal long memory or seasonal integrated process (both SAR(1)) in combination with a sesonal MA(1) or in combination with some seasonal AR(2-4) components. The pacf show some significance between lag 2-9 without a little echo in the acf lag 13-16, which can come from some MA processes but it's hard to say at this stage. We simply assume some ARMA processes present. We may entertain the model as a SARIMA(9,1,q)(1,0,1) using these plots, where q is undertermined yet.
 
 ```{r}
 par(mfrow = c(2,1))
@@ -728,7 +728,7 @@ To remove linear trend it is necessary to difference once with lag 1. Because in
 
 $$(1-B)(1 - B^{12})X_t = 0.5 + W_t$$
 
-$$X_t = 0.5 + X_{t-12} - X_{t-13} + X_{t-1} + w_t$$
+$$X_t = 0.5 + X_{t-12} - X_{t-13} + X_{t-1} + W_t$$
 
 ```{r}
 set.seed(30)
