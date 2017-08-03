@@ -37,52 +37,136 @@ From the EDA, we speculated the following models:
   - First Differenced Series: SARIMA(9,1,q)(1,0,1)
   - First and Seasonal Differenced Series: SARIMA(4,1,0)(0,1,1)
 
-Because the EDA were inconclusive on differencing strategies, we define the following search spaces:
+Because the EDA was inconclusive on differencing strategies, we define the following search spaces:
 
   - Seasonal Differenced Series: SARIMA(1:4,0,0:3)(0:4,1,0:3)
-  - First Differenced Series: SARIMA(9,1,0:3)(0:3,0,0:3) 
-  - First and Seasonal Differenced Series: SARIMA(0:5,1,0:2)(0:2,1,0:3)
+  - First Differenced Series: SARIMA(1:9,1,0:3)(0:3,0,0:3) 
+  - First and Seasonal Differenced Series: SARIMA(0:5,1,0:3)(0:3,1,0:3)
 
 where SARIMA(p,d,q)(P,D,Q)_12 is the general form of model.
 
-```{r}
-# Seasonal Differenced Series: SARIMA(1:4,0,0:3)(0:4,1,0:3)
+```{r,eval = FALSE}
+# Seasonal Differenced Series : SARIMA(1:4,0,0:3)(0:4,1,0:3)
 bestAIC <- 10000 
-
-# Find Best Fit with Lowest AIC
 unem.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
-```
 
-```{r}
 for(p in 1:4){
   for (q in 0:3){
     for (P in 0:4){
       for (Q in 0:3){
-
-        m <- Arima(unem.train.ts, order = c(p, 0, q), seasonal = list(order = c(P, 1, Q), period = 12))
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 0, q), seasonal = list(order = c(P, 1, Q), period = 12)))
+        
         if(m$aic < bestAIC) # update if this model attain better aic
-        { 
-          
-          bestAIC = m$aic
+        { bestAIC = m$aic
           bestFit = m
           bestModel = c( p, q, P, Q)
           cat(p,q,P,Q,as.numeric(bestAIC), "\n")
           unem.diff12.df = rbind(unem.diff12.df, 
-                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))
-        }  
+                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+  
       }
     }
   }
 }
+
+write.csv(x = unem.diff12.df, file = "unem.diff12.df.csv")
+
+
+# First Differenced Series: SARIMA(9,1,0:3)(0:3,0,0:3) 
+
+bestAIC <- 10000 
+
+unem.diff.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+
+for(p in 1:9){
+  for (q in 0:3){
+    for (P in 0:3){
+      for (Q in 0:3){
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q), seasonal = list(order = c(P, 0, Q), period = 12)),
+            silent = TRUE)
+        
+        if(m$aic < bestAIC) # update if this model attain better aic
+        { bestAIC = m$aic
+        bestFit = m
+        bestModel = c( p, q, P, Q)
+        cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+        unem.diff.df = rbind(unem.diff.df, 
+                               data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+      }
+    }
+  }
+}
+
+write.csv(x = unem.diff.df, file = "unem.diff.df.csv")
+
+
+
+# First and Seasonal Differenced Series: SARIMA(0:5,1,0:3)(0:3,1,0:3) 
+
+bestAIC <- 10000 
+
+unem.diff.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+
+for(p in 0:5){
+  for (q in 0:3){
+    for (P in 0:3){
+      for (Q in 0:3){
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q), seasonal = list(order = c(P, 1, Q), period = 12)),
+            silent = TRUE)
+        
+        if(m$aic < bestAIC) # update if this model attain better aic
+        { bestAIC = m$aic
+        bestFit = m
+        bestModel = c( p, q, P, Q)
+        cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+        unem.diff.diff12.df = rbind(unem.diff.diff12.df, 
+                             data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+      }
+    }
+  }
+}
+
+write.csv(x = unem.diff.diff12.df, file = "unem.diff.diff12.df.csv")
 ```
 
 ```{r}
-m <- Arima(unem.train.ts, order = c(1, 1, 0), seasonal = list(order = c(0, 1, 0), period = 12))
+# Seasonal Differenced Results
+unem.diff12.df = read.csv("unem.diff12.df.csv")
+unem.diff12.df
+```
+
+```{r}
+# First Differenced Results
+unem.diff.df = read.csv("unem.diff.df.csv")
+unem.diff.df
+```
+
+```{r}
+# First and Seasonal Differenced Results
+unem.diff.diff12.df = read.csv("unem.diff.diff12.df.csv")
+unem.diff.diff12.df
+```
+
+
+```{r}
+m <- Arima(unem.train.ts, order = c(4, 0, 3), seasonal = list(order = c(0, 1, 1), period = 12))
 ```
 
 ```{r}
 m$aic
 ```
+
+```{r}
+par(mfrow = c(2,1))
+acf(m$residuals)
+pacf(m$residuals)
+```
+
+
+
 
 
 ```{r}
