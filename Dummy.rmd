@@ -10,132 +10,347 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-par(mfrow = c(3,1))
-
-ts.plot(auto.ts)
-abline(lm(auto.ts ~ time(auto.ts)))
-
-ts.plot(auto.ts.diff12)
-abline(lm(auto.ts.diff12 ~ time(auto.ts.diff12)), 
-       col = "green", lty = "dotdash", lwd = 2)
-abline(h = mean(auto.ts.diff12), lwd = 0.5)
-abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) + 
-               2 * sd(auto.ts.diff12)), col = "red", 
-       lwd = 1, lty = "dotted")
-abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) - 
-               2 * sd(auto.ts.diff12)), col = "red", 
-       lwd = 1, lty = "dotted")
-title("Seasonally Differenced - Auto Sales")
-
-ts.plot(auto.ts.diff)
-abline(lm(auto.ts.diff ~ time(auto.ts.diff)), 
-       col = "green", lty = "dotdash", lwd = 2)
-abline(h = mean(auto.ts.diff), lwd = 0.5)
-abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) + 
-               2 * sd(auto.ts.diff)), col = "red", 
-       lwd = 1, lty = "dotted")
-abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) - 
-               2 * sd(auto.ts.diff)), col = "red", 
-       lwd = 1, lty = "dotted")
-title("First Differenced - Auto Sales")
+unem.data = read.csv("UNRATENSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
+df = unem.data
 ```
 
 ```{r}
-par(mfrow = c(2,1))
-acf(unem.ts.diff12, lag.max = 61, main = "")
-title("ACF Seasonally Diffenced Unemployment Rate")
-pacf(unem.ts.diff12, lag.max = 61, main = "")
-title("PACF Seasonally Diffenced Unemployment Rate")
+# Michelle's Code
+df.train<-df[0:816,]
+df.test<-df[817:834,]
+ts.train<-ts(df.train$UNRATENSA, frequency = 12)
+ts.test<-ts(df.test$UNRATENSA)
+ts<-ts(df$UNRATENSA)
+```
+
+# First Difference Only
+
+```{r}
+best.aic = 1e8
+
+for(p in 0:6){for (q in 0:6){ for (P in 0:6){ for (Q in 0:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
 ```
 
 ```{r}
-par(mfrow = c(2,1))
-acf(auto.ts.diff12, lag.max = 61, main = "")
-title("ACF for Seasonally Differenced Autosales")
-pacf(auto.ts.diff12, lag.max = 61, main = "")
-title("PACF for Seasonally Differenced Autosales")
+best.aic = 1e8
+
+for(p in 1){for (q in 5:6){ for (P in 0:6){ for (Q in 4:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+```
+
+```{r}
+best.aic = 1e8
+
+for(p in 1){for (q in 5){ for (P in 6){ for (Q in 5:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+
+```
+
+```{r}
+best.aic = 1e8
+
+for(p in 1){for (q in 6){ for (P in 0:6){ for (Q in 0:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+
+```
+
+```{r}
+best.aic = 1e8
+
+for(p in 1){for (q in 6){ for (P in 6){ for (Q in 0:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+```
+
+```{r}
+best.aic = 1e8
+
+for(p in 1){for (q in 6){ for (P in 6){ for (Q in 5:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+```
+
+```{r}
+best.aic = 1e8
+
+for(P in 0:6){for (Q in 0:6){ for (p in 0:6){ for (q in 0:6){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,0,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+```
+
+# Seasonal Difference Only
+
+
+
+# First Difference + Seasonal Difference
+
+```{r}
+best.aic = 1e8
+
+for(p in 0:3){for (q in 0:3){ for (P in 0:3){ for (Q in 0:3){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,1,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+# Michelle's Loop 1:3 1:3 0:2 0:2
+
+# SARIMA(2,1,3)(3,1,3)
+```
+
+```{r}
+best.aic = 1e8
+
+for(p in 0:3){for (q in 0:3){ for (P in 0:3){ for (Q in 0:3){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,1,Q), period = frequency(ts)), method = "CSS-ML")
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+# SARIMA(3,1,3)(2,1,3)
+```
+
+```{r}
+mod = forecast::Arima(ts, order = c(2 ,1, 3), 
+                                seasonal = list(order = c(3,1,3), period = frequency(ts)), method = "ML")
+```
+
+```{r}
+summary(mod)
+```
+
+```{r}
+ts.plot(mod$residuals)
+acf(mod$residuals, lag.max = 150, main = "")
+title("acf SARIMA(2,1,3)(3,1,3)")
+pacf(mod$residuals,lag.max = 150, main = "")
+title("pacf SARIMA(2,1,3)(3,1,3)")
+```
+
+```{r}
+mod4 = forecast::Arima(ts, order = c(2 ,1, 1), 
+                                seasonal = list(order = c(0,1,0), period = frequency(ts)), method = "ML")
+
+summary(mod4)
+
+ts.plot(mod4$residuals)
+acf(mod4$residuals, lag.max = 150, main = "")
+title("acf SARIMA(2,1,1)(0,1,0)")
+pacf(mod4$residuals,lag.max = 150, main = "")
+title("pacf SARIMA(2,1,3)(0,1,0)")
+```
+
+```{r}
+Box.test(mod$residuals, lag=25, type = c("Ljung-Box"))
+Box.test(mod4$residuals, lag=25, type = c("Ljung-Box"))
 ```
 
 
 ```{r}
-par(mfrow = c(2,1))
-acf(unem.ts.diff, lag.max = 720, main = "")
-title("ACF First Diffenced Unemployment Rate")
-pacf(unem.ts.diff, lag.max = 720, main = "")
-title("PACF First Diffenced Unemployment Rate")
+f1<-forecast(mod, 18)
+f2<-forecast(mod4, 18)
+Box.test(mod2$residuals, lag=25, type = c("Ljung-Box"))
+Box.test(mod2$residuals, lag=25, type = c("Ljung-Box"))
 ```
 
 ```{r}
-par(mfrow = c(2,1))
-acf(auto.ts.diff, lag.max = 720, main = "")
-title("ACF First Difference Auto Sales")
-pacf(auto.ts.diff, lag.max = 720, main = "")
-title("PACF First Difference Auto Sales")
-```
-
-
-```{r}
-par(mfrow = c(2,1))
-acf(auto.ts.diff, lag.max = 61, main = "")
-title("ACF First Difference Auto Sales")
-pacf(auto.ts.diff, lag.max = 61, main = "")
-title("PACF First Difference Auto Sales")
-```
-
-```{r}
-par(mfrow = c(2,1))
-acf(unem.ts.diff, lag.max = 61, main = "")
-title("ACF First Diffenced Unemployment Rate")
-pacf(unem.ts.diff, lag.max = 61, main = "")
-title("PACF First Diffenced Unemployment Rate")
+out.sample.fit<-data.frame(actual=ts.test)
+out.sample.fit$predicted1<-f1$mean
+out.sample.fit$predicted2<-f2$mean
+out.sample.fit$diff1<-out.sample.fit$actual-out.sample.fit$predicted1
+out.sample.fit$diff2<-out.sample.fit$actual-out.sample.fit$predicted2
+err1<-sum(out.sample.fit$diff1**2)
+err2<-sum(out.sample.fit$diff2**2)
 ```
 
 
 ```{r}
-combined.raw = ts.intersect(unem.ts, auto.ts)
-unem.intersect.ts = combined.raw[,1]
+mod2 = forecast::Arima(ts, order = c(3 ,1, 3), 
+                                seasonal = list(order = c(2,1,3), period = frequency(ts)), method = "ML")
+```
 
-par(mfrow = c(2,1))
+```{r}
+summary(mod2)
+```
 
-# Kernel smoothing
-unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
-                             unem.intersect.ts, kernel = c("normal"), 
-                             bandwidth = 10)
+```{r}
+ts.plot(mod2$residuals)
+acf(mod2$residuals, lag.max = 48, main = "")
+title("acf SARIMA(3,1,3)(2,1,3)")
+pacf(mod2$residuals,lag.max = 48, main = "")
+title("pacf SARIMA(3,1,3)(2,1,3)")
+```
 
-unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
-                             unem.intersect.ts, kernel = c("normal"), 
-                             bandwidth = 4)
 
-unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
-                               unem.intersect.ts, kernel = c("normal"), 
-                               bandwidth = 0.5)
 
-# Make plot
-plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
-     main = "Unemployment Rate - Kernel Smoothed")
-lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
-lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
-lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
-abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
 
-# Kernel smoothing
-auto.k.smooth.widest = ksmooth(time(auto.ts), 
-                             auto.ts, kernel = c("normal"), 
-                             bandwidth = 10)
 
-auto.k.smooth.wide = ksmooth(time(auto.ts), 
-                             auto.ts, kernel = c("normal"), 
-                             bandwidth = 4)
 
-auto.k.smooth.narrow = ksmooth(time(auto.ts), 
-                               auto.ts, kernel = c("normal"), 
-                               bandwidth = 0.5)
 
-# Make plot
-plot(auto.ts, col = "gray", ylab = "Auto Sales thousands of units",
-     main = "Car Sales - Kernel Smoothed")
-lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
-lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
-lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
-abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+# First Difference + Seasonal difference twice
+
+```{r}
+best.aic = 1e8
+
+for(p in 0:3){for (q in 0:3){ for (P in 0:3){ for (Q in 0:3){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,2,Q), period = frequency(ts)), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))0
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+# SARIMA(3,1,3)(3,2,3)
+```
+
+```{r}
+mod3 = forecast::Arima(ts, order = c(2 ,1, 1), 
+                                seasonal = list(order = c(0,1,1), period = frequency(ts)), method = "ML")
+```
+
+```{r}
+summary(mod3)
+```
+
+```{r}
+ts.plot(mod3$residuals)
+acf(mod3$residuals, lag.max = 48)
+pacf(mod3$residuals,lag.max = 48)
+```
+
+# First Difference + Seasonal difference period = 4
+
+```{r}
+best.aic = 1e8
+
+for(p in 0:4){for (q in 0:4){ for (P in 0:4){ for (Q in 0:4){
+          
+          mod = forecast::Arima(ts, order = c(p,1, q), 
+                                seasonal = list(order = c(P,1,Q), period = 4), method = "ML"
+                                )
+          
+          if (mod$aic < best.aic) {
+            best.aic = mod$aic
+            best.mod = mod
+            best.order = c(p,q,P,Q)
+            print(c(p,q,P,Q,mod$aic))
+          } 
+          list(best.mod,best.aic,best.order)
+}}}}
+
+# SARIMA(3,1,3)(3,2,3)
 ```

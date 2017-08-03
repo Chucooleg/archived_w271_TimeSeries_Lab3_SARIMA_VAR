@@ -273,3 +273,23 @@ cointegration test yes
 but regressing unem on auto is not informative, residuals behavior are poor. linear combo is not strong
 
 Bivariate investigation conclusion
+
+
+
+-------------------------------------------------------------
+
+Q1.
+
+(Sue)
+Generally speaking, for a model with both trend and seasonality, both seasonal difference and non-seasonal difference should be applied to get stationary series.  Suppose that S is the number of time periods during a season, e.g. S=12 for monthly data and S=4 for quarterly data. Take a seasonal difference of lag S, which means take the Sth difference to get rid of seasonality. In this case the trend is linear, so take first difference as non-seasonal differencing to remove trend for data.
+
+(Michelle)
+It would be necessary to difference once with lag 1 to remove the linear trend and once with the appropriate seasonal lag (likely 12 in this case) to remove the seasonality. This is because...?
+
+(Legg)
+
+To remove linear trend it is necessary to difference once with lag 1. Because in a purely linear trend, differencing by the last observation singles out the roughly equivalent increments which are stationary at the mean. To remove seasonal patterns, it is necessary to difference once with lag 12 for annual patterns, or lag 4 for quarterly patterns. Because in a purely seasonal series where each observation is same as the one from the last season, differencing by the observation from last season removes seasonal fluctuations and stablize the series at the mean. Real world economic time series, like ours, often exhibit both linear trend in additional to annual seasonal behavior. Therefore differencing by lag 1 and lag 12 will help stablize the raw series at the mean. In the following we simulate a raw series that is a random walk with drift(linear trend) and strong dependence on its seasonal lag 1, then demonstrate how first and seasonal differencing can stablize it at the mean. The model is :
+
+-------------------------------------------------------------
+Q2.
+

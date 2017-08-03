@@ -1,0 +1,110 @@
+---
+title: "Lab3 Q2"
+author: "Michelle Kim, Sue Yang, Legg Yeung"
+date: "August 2, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# copied
+library(moments)
+library(psych)
+library(forecast)
+library(tseries)
+
+unem.data = read.csv("UNRATENSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
+```
+
+```{r}
+unem.train = unem.data[0:816,]
+unem.test = unem.data[817:834,]
+```
+
+```{r}
+unem.train.ts = ts(unem.train$UNRATENSA)
+unem.test.ts = ts(unem.test$UNRATENSA)
+```
+
+
+From the EDA, we speculated the following models:
+
+  - Seasonal Differenced Series: SARIMA(4,0,1)(3,1,Q)
+  - First Differenced Series: SARIMA(9,1,q)(1,0,1)
+  - First and Seasonal Differenced Series: SARIMA(4,1,0)(0,1,1)
+
+Because the EDA were inconclusive on differencing strategies, we define the following search spaces:
+
+  - Seasonal Differenced Series: SARIMA(1:4,0,0:3)(0:4,1,0:3)
+  - First Differenced Series: SARIMA(9,1,0:3)(0:3,0,0:3) 
+  - First and Seasonal Differenced Series: SARIMA(0:5,1,0:2)(0:2,1,0:3)
+
+where SARIMA(p,d,q)(P,D,Q)_12 is the general form of model.
+
+```{r}
+# Seasonal Differenced Series: SARIMA(1:4,0,0:3)(0:4,1,0:3)
+bestAIC <- 10000 
+
+# Find Best Fit with Lowest AIC
+unem.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+```
+
+```{r}
+for(p in 1:4){
+  for (q in 0:3){
+    for (P in 0:4){
+      for (Q in 0:3){
+
+        m <- Arima(unem.train.ts, order = c(p, 0, q), seasonal = list(order = c(P, 1, Q), period = 12))
+        if(m$aic < bestAIC) # update if this model attain better aic
+        { 
+          
+          bestAIC = m$aic
+          bestFit = m
+          bestModel = c( p, q, P, Q)
+          cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+          unem.diff12.df = rbind(unem.diff12.df, 
+                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))
+        }  
+      }
+    }
+  }
+}
+```
+
+```{r}
+m <- Arima(unem.train.ts, order = c(1, 1, 0), seasonal = list(order = c(0, 1, 0), period = 12))
+```
+
+```{r}
+m$aic
+```
+
+
+```{r}
+tempframe = unem.diff12.df
+```
+
+
+```{r}
+print_resid_chart <- function(ts, p, d, q, P, D, Q) {
+  m <- Arima(ts, order = c(p, d, q), seasonal = list(order = c(P,D, Q), period = 12))
+  print(m$aic)
+  par(mfrow=c(3,1))
+  hist(m$residuals)
+  acf(m$residuals, 156)
+  pacf(m$residuals, 156)
+  return(m)
+}
+```
+
+```{r}
+m1 <- print_resid_chart(unem.train,2, 1, 1, 0, 1, 1)
+m2 <- print_resid_chart(unem.train,3, 1, 1, 0, 1, 1)
+m3 <- print_resid_chart(unem.train,2, 1, 3, 0, 1, 1)
+```
+
