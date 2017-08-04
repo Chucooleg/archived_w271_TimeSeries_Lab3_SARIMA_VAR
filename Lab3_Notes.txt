@@ -311,12 +311,21 @@ For first and seasonal differenced models, we reduced from the top AIC candidate
 	- SARIMA(1,1,2)(3,1,3)
 
 -------------------------------------------------------------
-Q2(B)
+Good morning! I just uploaded rmd and pdf of my question 2. To knit the file, pls grab the csv files as well as they store the loop results (so that we don't have to knit the loops again...). 
 
-specify the model (at the end)
+For 2A), I used the EDA insights to set up 3 search spaces for first, seasonal and both differenced models. Then do the loop, AIC, residuals, out-of-sample routine and settled on SARIMA(2,1,1)(1,0,1). I also specified the model and did a little math to show that the estimated model is stationary after differenced, and invertible.
 
-can use LungBox Test
+For 2B), I started with lm(x_t ~ t + m + u) and settled with lm(x_t ~ t + t^2 + m + u). Then the usual CLM routine.
 
-Breusch Pagan
+I also wrote answers for the sub-questions about forecast, prediction and model comparisons. It's a little lengthy, but is somewhat thorough with write-up. As with question 1, I hope it summarizes what all three of us have. We can reduce the length later if necessary.
 
-Shapiro
+
+-------------------------------------------------------------
+Q.3
+
+
+
+tseries::ar ---> find best order using AIC
+
+vars::VARselect --> look for best order using AIC, HQ, SC, FPE
+vars::VAR  ---> we specify the order (OLS)

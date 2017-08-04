@@ -28,14 +28,14 @@ It is Dec 31, 2016 and you work for a non-partisan think tank focusing on the st
 (A) Build a SARIMA model using the unemployment data and produce a 1 year forecast and then a 4 year forecast. Because it is Dec 31, 2016, leave out 2016 as your test data.
 
 ```{r}
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
+auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
 unem.train = unem.data[0:816,]
 unem.test = unem.data[817:834,]
-```
-
-```{r}
 unem.train.ts = ts(unem.train$UNRATENSA)
 unem.test.ts = ts(unem.test$UNRATENSA)
 ```
+
 
 ## Construct and Loop through search spaces
 
@@ -65,7 +65,8 @@ for(p in 1:4){
     for (P in 0:4){
       for (Q in 0:3){
         cat(p,q,P,Q,"\n")
-        try(m <- Arima(unem.train.ts, order = c(p, 0, q), seasonal = list(order = c(P, 1, Q), period = 12)))
+        try(m <- Arima(unem.train.ts, order = c(p, 0, q), 
+                       seasonal = list(order = c(P, 1, Q), period = 12)))
         
         if(m$aic < bestAIC) # update if this model attain better aic
         { bestAIC = m$aic
@@ -73,7 +74,8 @@ for(p in 1:4){
           bestModel = c( p, q, P, Q)
           cat(p,q,P,Q,as.numeric(bestAIC), "\n")
           unem.diff12.df = rbind(unem.diff12.df, 
-                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                            "aic" = bestAIC))} 
       }
     }
   }
@@ -94,7 +96,8 @@ for(p in 1:9){
     for (P in 0:3){
       for (Q in 0:3){
         cat(p,q,P,Q,"\n")
-        try(m <- Arima(unem.train.ts, order = c(p, 1, q), seasonal = list(order = c(P, 0, Q), period = 12)),
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q),
+                       seasonal = list(order = c(P, 0, Q), period = 12)),
             silent = TRUE)
         
         if(m$aic < bestAIC) # update if this model attain better aic
@@ -103,7 +106,8 @@ for(p in 1:9){
         bestModel = c( p, q, P, Q)
         cat(p,q,P,Q,as.numeric(bestAIC), "\n")
         unem.diff.df = rbind(unem.diff.df, 
-                               data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+                               data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                          "aic" = bestAIC))} 
       }
     }
   }
@@ -125,7 +129,8 @@ for(p in 0:5){
     for (P in 0:3){
       for (Q in 0:3){
         cat(p,q,P,Q,"\n")
-        try(m <- Arima(unem.train.ts, order = c(p, 1, q), seasonal = list(order = c(P, 1, Q), period = 12)),
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q), 
+                       seasonal = list(order = c(P, 1, Q), period = 12)),
             silent = TRUE)
         
         if(m$aic < bestAIC) # update if this model attain better aic
@@ -134,7 +139,8 @@ for(p in 0:5){
         bestModel = c( p, q, P, Q)
         cat(p,q,P,Q,as.numeric(bestAIC), "\n")
         unem.diff.diff12.df = rbind(unem.diff.diff12.df, 
-                             data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
+                             data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                        "aic" = bestAIC))} 
       }
     }
   }
@@ -261,15 +267,19 @@ m.diff.1 <- Arima(unem.train.ts, order = c(8, 1, 3),
                   seasonal = list(order = c(1, 0, 1), period = 12))
 
 # 2nd (2,1,3)(2,0,1)
-#m.diff.2 <- Arima(unem.train.ts, order = c(2, 1, 3), seasonal = list(order = c(2, 0, 1), period = 12))
+#m.diff.2 <- Arima(unem.train.ts, order = c(2, 1, 3), 
+#           seasonal = list(order = c(2, 0, 1), period = 12))
 
 # 3rd (2,1,1)(1,0,1)
-m.diff.3 <- Arima(unem.train.ts, order = c(2, 1, 1), seasonal = list(order = c(1, 0, 1), period = 12))
+m.diff.3 <- Arima(unem.train.ts, order = c(2, 1, 1), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
 
 # 4th (1,1,2)(1,0,1)
-#m.diff.4 <- Arima(unem.train.ts, order = c(1, 1, 2), seasonal = list(order = c(1, 0, 1), period = 12))
+#m.diff.4 <- Arima(unem.train.ts, order = c(1, 1, 2), 
+#                 seasonal = list(order = c(1, 0, 1), period = 12))
 # 5th (1,1,1)(3,0,3)
-#m.diff.5 <- Arima(unem.train.ts, order = c(1, 1, 1), seasonal = list(order = c(3, 0, 3), period = 12))
+#m.diff.5 <- Arima(unem.train.ts, order = c(1, 1, 1), 
+#                 seasonal = list(order = c(3, 0, 3), period = 12))
  
 # 6th (1,1,1)(1,0,1)
 m.diff.6 <- Arima(unem.train.ts, order = c(1, 1, 1), 
@@ -398,7 +408,7 @@ The Box-Ljung tests above rejected the null hypothesis for all three models to s
 
 (A.i)How well does your model predict the unemployment rate up until June 2017? 
 
-```{r, eval = F}
+```{r}
 # candidate models
 # SARIMA(4,0,3)(0,1,1) m.diff12.1
 # SARIMA(2,0,1)(0,1,1) m.diff12.7
@@ -409,7 +419,9 @@ The Box-Ljung tests above rejected the null hypothesis for all three models to s
 # SARIMA(2,1,1)(0,1,1) m.diff.diff12.2
 # SARIMA(1,1,2)(3,1,3) m.diff.diff12.3
 
-candidate_mods = list(m.diff12.1,m.diff12.7,m.diff.1,m.diff.3,m.diff.6,m.diff.diff12.1,m.diff.diff12.2,m.diff.diff12.3)
+candidate_mods = list(m.diff12.1,m.diff12.7,m.diff.1,m.diff.3,
+                      m.diff.6,m.diff.diff12.1,m.diff.diff12.2,
+                      m.diff.diff12.3)
 ```
 
 ```{r}
@@ -661,7 +673,7 @@ plot(unem.lm.quad, which = 4)
 ### Prediction up until 2017
 
 ```{r}
-test.time = seq(2015,2017.417,by = (1/12))
+test.time = seq(2016,2017.417,by = (1/12))
 test.month = c(seq(1,12),seq(1,6))
 
 test.prediction = predict.lm(object = unem.lm.quad, se.fit = T,
