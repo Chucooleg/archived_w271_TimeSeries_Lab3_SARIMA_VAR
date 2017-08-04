@@ -20,6 +20,12 @@ unem.data = read.csv("UNRATENSA.csv", header = T)
 auto.data = read.csv("TOTALNSA.csv", header = T)
 ```
 
+#Question 2: SARIMA
+
+It is Dec 31, 2016 and you work for a non-partisan think tank focusing on the state of the US economy. You are interested in forecasting the unemployment rate through 2017 (and then 2020) to use it as a benchmark against the incoming administrations economic performance. Use the dataset UNRATENSA.csv and answer the following:
+
+(A) Build a SARIMA model using the unemployment data and produce a 1 year forecast and then a 4 year forecast. Because it is Dec 31, 2016, leave out 2016 as your test data.
+
 ```{r}
 unem.train = unem.data[0:816,]
 unem.test = unem.data[817:834,]
@@ -30,6 +36,7 @@ unem.train.ts = ts(unem.train$UNRATENSA)
 unem.test.ts = ts(unem.test$UNRATENSA)
 ```
 
+## Construct and Loop through search spaces
 
 From the EDA, we speculated the following models:
 
@@ -46,6 +53,8 @@ Because the EDA was inconclusive on differencing strategies, we define the follo
 where SARIMA(p,d,q)(P,D,Q)_12 is the general form of model.
 
 ```{r,eval = FALSE}
+# READ LOOP RESULTS FROM THE CSV FILES
+
 # Seasonal Differenced Series : SARIMA(1:4,0,0:3)(0:4,1,0:3)
 bestAIC <- 10000 
 unem.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
@@ -64,12 +73,12 @@ for(p in 1:4){
           cat(p,q,P,Q,as.numeric(bestAIC), "\n")
           unem.diff12.df = rbind(unem.diff12.df, 
                                  data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, "aic" = bestAIC))} 
-  
       }
     }
   }
 }
 
+unem.diff12.df = unem.diff12.df[seq(dim(unem.diff12.df)[1],1),]
 write.csv(x = unem.diff12.df, file = "unem.diff12.df.csv")
 
 
@@ -99,6 +108,7 @@ for(p in 1:9){
   }
 }
 
+unem.diff.df = unem.diff.df[seq(dim(unem.diff.df)[1],1),]
 write.csv(x = unem.diff.df, file = "unem.diff.df.csv")
 
 
@@ -129,66 +139,389 @@ for(p in 0:5){
   }
 }
 
+unem.diff.diff12.df = unem.diff.diff12.df[seq(dim(unem.diff.diff12.df)[1],1),]
 write.csv(x = unem.diff.diff12.df, file = "unem.diff.diff12.df.csv")
 ```
 
+### Seasonal Differenced Search Result
+
 ```{r}
-# Seasonal Differenced Results
 unem.diff12.df = read.csv("unem.diff12.df.csv")
-unem.diff12.df
+cat("Top candidates for seasonal differenced model: d = 0, D = 1 \n")
+unem.diff12.df[,3:7]
 ```
 
+### First Differenced Search Result
+
 ```{r}
-# First Differenced Results
 unem.diff.df = read.csv("unem.diff.df.csv")
-unem.diff.df
+cat("Top candidates for first differenced model: d = 1, D = 0 \n")
+unem.diff.df[,3:7]
 ```
 
+### First and Seasonal Differenced Search Result
+
 ```{r}
-# First and Seasonal Differenced Results
 unem.diff.diff12.df = read.csv("unem.diff.diff12.df.csv")
-unem.diff.diff12.df
+cat("Top candidates for first and seasonal differenced model: d = 1, D = 1 \n")
+unem.diff.diff12.df[,3:7]
 ```
 
+Using the results above, we attempt to simplify the order of the top candidate for each search space by comparing their residuals against respective lower order models.
 
-```{r}
-m <- Arima(unem.train.ts, order = c(4, 0, 3), seasonal = list(order = c(0, 1, 1), period = 12))
+### Seasonal Differenced Models ( d = 0 , D = 1)
+
+```{r, warning=FALSE}
+# top (4,0,3)(0,1,1)
+m.diff12.1 <- Arima(unem.train.ts, order = c(4, 0, 3), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 2nd (3,0,1)(0,1,1)
+m.diff12.2 <- Arima(unem.train.ts, order = c(3, 0, 1), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 3rd (2,0,3)(2,1,3)
+#m.diff12.3 <- Arima(unem.train.ts, order = c(2, 0, 3), 
+#                    seasonal = list(order = c(2, 1, 3), period = 12))
+# 4th (2,0,2)(3,1,3)
+#m.diff12.4 <- Arima(unem.train.ts, order = c(3, 0, 1), 
+#                    seasonal = list(order = c(0, 1, 1), period = 12))
+# 5th (2,0,2)(0,1,1)
+#m.diff12.5 <- Arima(unem.train.ts, order = c(2, 0, 2), 
+#                    seasonal = list(order = c(0, 1, 1), period = 12))
+# 6th (2,0,1)(3,1,3)
+#m.diff12.6 <- Arima(unem.train.ts, order = c(2, 0, 1), 
+#                    seasonal = list(order = c(3, 1, 3), period = 12))
+
+# 7th (2,0,1)(0,1,1)
+m.diff12.7 <- Arima(unem.train.ts, order = c(2, 0, 1), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 8th (1,0,3)(2,1,3)
+m.diff12.8 <- Arima(unem.train.ts, order = c(1, 0, 3), 
+                    seasonal = list(order = c(2, 1, 3), period = 12))
 ```
 
 ```{r}
-m$aic
-```
-
-```{r}
-par(mfrow = c(2,1))
-acf(m$residuals)
-pacf(m$residuals)
-```
-
-
-
-
-
-```{r}
-tempframe = unem.diff12.df
-```
-
-
-```{r}
-print_resid_chart <- function(ts, p, d, q, P, D, Q) {
-  m <- Arima(ts, order = c(p, d, q), seasonal = list(order = c(P,D, Q), period = 12))
-  print(m$aic)
+# Function to print residual charts
+print_resid_chart <- function(mod) {
+  cat("Model SARIMA ", c(mod$arma[1], mod$arma[6], mod$arma[2],
+                         mod$arma[3], mod$arma[7], mod$arma[4]) , ":\n")
+  cat("AIC: ",(mod$aic),"\n")
+  cat("BIC: ",(mod$bic),"\n")
   par(mfrow=c(3,1))
-  hist(m$residuals)
-  acf(m$residuals, 156)
-  pacf(m$residuals, 156)
-  return(m)
+  hist(mod$residuals)
+  acf(mod$residuals, 156)
+  pacf(mod$residuals, 156)
 }
 ```
 
 ```{r}
-m1 <- print_resid_chart(unem.train,2, 1, 1, 0, 1, 1)
-m2 <- print_resid_chart(unem.train,3, 1, 1, 0, 1, 1)
-m3 <- print_resid_chart(unem.train,2, 1, 3, 0, 1, 1)
+# top (4,0,3)(0,1,1)
+print_resid_chart(m.diff12.1)
+
+#print_resid_chart(m.diff12.2)
+#print_resid_chart(m.diff12.3,2)
+#print_resid_chart(m.diff12.4,2)
+#print_resid_chart(m.diff12.5,2)
+#print_resid_chart(m.diff12.6,2)
+
+# 7th (2,0,1)(0,1,1)
+print_resid_chart(m.diff12.7)
+
+# 8th (1,0,3)(2,1,3)
+print_resid_chart(m.diff12.8)
+```
+
+```{r}
+# top (4,0,3)(0,1,1)
+Box.test(m.diff12.1$residuals, lag=25, type = c("Ljung-Box"))
+# 7th (2,0,1)(0,1,1)
+Box.test(m.diff12.7$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+For seasonal differenced models, we reduced from the top AIC candidate, SARIMA(4,0,3)(0,1,1) to 7th candidate SARIMA(2,0,1)(0,1,1) and retain white noise residual behavior. 8th candidate SARIMA(1,0,3)(2,1,3) starts to show significant pacfs at lag 4 and 5, therefore we stop searching from there downwards. We will keep these two candidates to compare out of sample performance:
+
+	- SARIMA(4,0,3)(0,1,1)
+	- SARIMA(2,0,1)(0,1,1) 
+	
+We perform the Box-Ljung test above for our residual series to see if residuals for these models are independently distributed. Test hypothesis is as follows:
+
+  - Ho : The residuals are independently distributed
+  - Ha : The residuals are not independently distributed 
+  
+  - The tests fail to reject the null hypothesis, thus support that the residuals resemble white noise.
+
+### First Differenced Models ( d = 1 , D = 0)
+
+```{r, warning=FALSE}
+# top (8,1,3)(1,0,1)
+m.diff.1 <- Arima(unem.train.ts, order = c(8, 1, 3), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 2nd (2,1,3)(2,0,1)
+#m.diff.2 <- Arima(unem.train.ts, order = c(2, 1, 3), seasonal = list(order = c(2, 0, 1), period = 12))
+
+# 3rd (2,1,1)(1,0,1)
+m.diff.3 <- Arima(unem.train.ts, order = c(2, 1, 1), seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 4th (1,1,2)(1,0,1)
+#m.diff.4 <- Arima(unem.train.ts, order = c(1, 1, 2), seasonal = list(order = c(1, 0, 1), period = 12))
+# 5th (1,1,1)(3,0,3)
+#m.diff.5 <- Arima(unem.train.ts, order = c(1, 1, 1), seasonal = list(order = c(3, 0, 3), period = 12))
+ 
+# 6th (1,1,1)(1,0,1)
+m.diff.6 <- Arima(unem.train.ts, order = c(1, 1, 1), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 7th (1,1,0)(1,0,1)
+m.diff.7 <- Arima(unem.train.ts, order = c(1, 1, 0), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 8th (1,1,0)(1,0,0)
+# m.diff.8 <- Arima(unem.train.ts, order = c(1, 1, 0), 
+#                  seasonal = list(order = c(1, 0, 0), period = 12))
+```
+
+
+```{r}
+# top (8,1,3)(1,0,1)
+print_resid_chart(m.diff.1)
+
+#print_resid_chart(m.diff.2)
+
+# third (2,1,1)(1,0,1)
+print_resid_chart(m.diff.3)
+
+# 4th (1,1,2)(1,0,1)
+#print_resid_chart(m.diff.4)
+# 5th (1,1,1)(3,0,3)
+#print_resid_chart(m.diff.5)
+
+# 6th (1,1,1)(1,0,1)
+print_resid_chart(m.diff.6)
+
+# 7th (1,1,0)(1,0,1)
+print_resid_chart(m.diff.7)
+
+# 8th (1,1,0)(1,0,0)
+# print_resid_chart(m.diff.8)
+```
+
+```{r}
+# top (8,1,3)(1,0,1)
+Box.test(m.diff.1$residuals, lag=25, type = c("Ljung-Box"))
+# third (2,1,1)(1,0,1)
+Box.test(m.diff.3$residuals, lag=25, type = c("Ljung-Box"))
+# 6th (1,1,1)(1,0,1)
+Box.test(m.diff.6$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+For first differenced models, we reduced from the top AIC candidate, SARIMA(8,1,3)(1,0,1) to 3rd candidate SARIMA(2,1,1)(1,0,1) and retain white noise residual behavior. 6th candidate SARIMA(1,1,1)(1,0,1) is still satisfactory but more of its lags are slightly closer to the cut-off. 7th candidate SARIMA(1,1,0)(1,0,1) starts to show significant pacfs at lag 2, 3 and 5, and 8th candidate SARIMA(1,1,0)(1,0,0) starts to show significant pacfs at seasonal lags, therefore we stop searching from there downwards. We will keep the first three candidates to compare out of sample performance:
+
+	- SARIMA(8,1,3)(1,0,1)
+	- SARIMA(2,1,1)(1,0,1)
+	- SARIMA(1,1,1)(1,0,1)
+	
+The Box-Ljung tests above rejected the null hypothesis for all three models to support that our residuals are independently distributed.
+
+
+### First and Seasonal Differenced Models ( d = 1 , D = 1)
+
+```{r, warning=FALSE}
+# top (2,1,3)(1,1,1)
+m.diff.diff12.1 <- Arima(unem.train.ts, order = c(2, 1, 3), 
+                         seasonal = list(order = c(1, 1, 1), period = 12))
+
+# 2nd (2,1,1)(0,1,1)
+m.diff.diff12.2 <- Arima(unem.train.ts, order = c(2, 1, 1), 
+                         seasonal = list(order = c(0, 1, 1), period = 12))
+# 3rd (1,1,2)(3,1,3)
+m.diff.diff12.3 <- Arima(unem.train.ts, order = c(1, 1, 2), 
+                         seasonal = list(order = c(3, 1, 3), period = 12))
+
+# 4th (1,1,2)(0,1,1)
+#m.diff.diff12.4 <- Arima(unem.train.ts, order = c(1, 1, 2), 
+#                         seasonal = list(order = c(0, 1, 1), period = 12))
+# 5th (1,1,1)(3,1,3)
+#m.diff.diff12.5 <- Arima(unem.train.ts, order = c(1, 1, 1), 
+#                         seasonal = list(order = c(3, 1, 3), period = 12))
+# 6th (1,1,1)(0,1,1)
+#m.diff.diff12.6 <- Arima(unem.train.ts, order = c(1, 1, 1), 
+#                          seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 7th (0,1,3)(2,1,3)
+m.diff.diff12.7 <- Arima(unem.train.ts, order = c(0, 1, 3), 
+                         seasonal = list(order = c(2, 1, 3), period = 12))
+```
+
+```{r}
+# top (2,1,3)(1,1,1)
+print_resid_chart(m.diff.diff12.1)
+
+# 2nd (2,1,1)(0,1,1)
+print_resid_chart(m.diff.diff12.2)
+# 3rd (1,1,2)(3,1,3)
+print_resid_chart(m.diff.diff12.3)
+
+# 4th (1,1,2)(0,1,1)
+#print_resid_chart(m.diff.diff12.4)
+# 5th (1,1,1)(3,1,3)
+#print_resid_chart(m.diff.diff12.5)
+# 6th (1,1,1)(0,1,1)
+#print_resid_chart(m.diff.diff12.6)
+
+# 7th (0,1,3)(2,1,3)
+print_resid_chart(m.diff.diff12.7)
+```
+
+```{r}
+# top (2,1,3)(1,1,1)
+Box.test(m.diff.diff12.1$residuals, lag=25, type = c("Ljung-Box"))
+# 2nd (2,1,1)(0,1,1)
+Box.test(m.diff.diff12.2$residuals, lag=25, type = c("Ljung-Box"))
+# 3rd (1,1,2)(3,1,3)
+Box.test(m.diff.diff12.3$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+For first and seasonal differenced models, we reduced from the top AIC candidate, SARIMA(2,1,3)(1,1,1) to 2nd candidate SARIMA(2,1,1)(0,1,1) and 3rd candidate(1,1,2)(3,1,3) with similar white noise behaviors. The 4th candidate SARIMA(1,1,2)(0,1,1), 5th candidate SARIMA(1,1,1)(3,1,3) and 6th SARIMA(1,1,1)(0,1,1) are still satisfactory but more of their lags are slightly closer to the cut-off (plots skipped here). 7th candidate SARIMA(0,1,3)(2,1,3) starts to show significant pacfs at lag 5 and 6, therefore we stop searching from there downwards. We will keep these three candidates to compare out of sample performance:
+
+	- SARIMA(2,1,3)(1,1,1)
+	- SARIMA(2,1,1)(0,1,1)
+	- SARIMA(1,1,2)(3,1,3)
+
+The Box-Ljung tests above rejected the null hypothesis for all three models to support that our residuals are independently distributed.
+
+	
+### Compare models based on out of sample errors uptil Jun 2017
+
+(A.i)How well does your model predict the unemployment rate up until June 2017? 
+
+```{r, eval = F}
+# candidate models
+# SARIMA(4,0,3)(0,1,1) m.diff12.1
+# SARIMA(2,0,1)(0,1,1) m.diff12.7
+# SARIMA(8,1,3)(1,0,1) m.diff.1
+# SARIMA(2,1,1)(1,0,1) m.diff.3
+# SARIMA(1,1,1)(1,0,1) m.diff.6
+# SARIMA(2,1,3)(1,1,1) m.diff.diff12.1
+# SARIMA(2,1,1)(0,1,1) m.diff.diff12.2
+# SARIMA(1,1,2)(3,1,3) m.diff.diff12.3
+
+candidate_mods = list(m.diff12.1,m.diff12.7,m.diff.1,m.diff.3,m.diff.6,m.diff.diff12.1,m.diff.diff12.2,m.diff.diff12.3)
+```
+
+```{r}
+# function to get RMSE
+get_RMSE = function(test.df, mod, ahead){
+  f = forecast(mod, ahead)$mean
+  sq.error = (test.df$UNRATENSA - f)^2
+  rmse = sqrt(mean(sq.error))
+  return (data.frame( "p" = mod$arma[1], "d" = mod$arma[6], "q" = mod$arma[2],
+                      "P" = mod$arma[3], "D" = mod$arma[7], "Q" = mod$arma[4],
+                      "RMSE" = rmse))
+}
+```
+
+```{r}
+RMSE.df = data.frame()
+for (i in 1:length(candidate_mods)) {
+  add.df = get_RMSE(unem.test, candidate_mods[[i]], 18)
+  RMSE.df = rbind(RMSE.df, add.df)
+}
+RMSE.df = RMSE.df[order(RMSE.df$RMSE),]
+RMSE.df
+```
+
+Out of sample errors tells us that SARIMA(2,1,1)(1,0,1), SARIMA(2,1,1)(0,1,1), SARIMA(1,1,1)(1,0,1) and SARIMA(1,1,2)(3,1,3) perform superior to the other candidates and their RMSEs are very close. We plot their forecasts to further compare these three.
+
+```{r}
+unem.actual.ts = ts(unem.data$UNRATENSA)
+# (2,1,1)(1,0,1)
+f.diff.3<-forecast(m.diff.3,18)
+# (2,1,1)(0,1,1)
+f.diff.diff12.2<-forecast(m.diff.diff12.2,18)
+# (1,1,1)(1,0,1)
+f.diff.6<-forecast(m.diff.6,18)
+# (1,1,2)(3,1,3)
+f.diff.diff12.3<-forecast(m.diff.diff12.3,18)
+```
+
+```{r}
+par(mfrow = c(2,2))
+
+plot(f.diff.3, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+plot(f.diff.diff12.2, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+plot(f.diff.6, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+plot(f.diff.diff12.3, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+```
+
+All four models predict closely to the test data. SARIMA(2,1,1)(1,0,1) performing the closest in the time plots and it has the lowest RMSE of 0.147. We will use this model to forecast unemployment rate until 2020. Before that, the model specification is given by the following:
+
+```{r}
+m.diff.3$coef
+```
+
+```{r}
+# characteristic equation for differenced AR component
+Mod(polyroot(c(1,-0.5986,-0.1241)))
+# characteristic equation for differenced SAR component
+Mod(polyroot(c(1,-0.9918)))
+# characteristic equation for differenced MA component
+Mod(polyroot(c(1,-0.4846)))
+# characteristic equation for differenced SMA component
+Mod(polyroot(c(1,-0.7583)))
+```
+
+
+$$(1 - \Theta B^{12})(1 - \theta_1 B - \theta_2 B^2)(1-B)x_t = (1 + \Phi B^{12})(1 + \phi B)w_t$$
+where $\Theta = +0.9918$, $\theta_1 = + 0.5986$, $\theta_2 = +0.1241$, $\Phi = -0.7583$, $\phi = -0.4846$.
+
+  - A unit root on the left specified by $(1-B)$, which was taken care of by first differencing. 
+  
+  - The first differenced AR component has characteristic equation $1 - 0.5986 B - 0.1241 B^2 = 0$, the roots for $B$ are 1.313 and 6.136. The first differenced seasonal component has characteristic equation $1 - 0.9918 B^{12} = 0$, the root for $B^{12}$ is 1.008. All roots exceed unity which means the first differenced series is stationary.
+  
+  - The first differenced MA component has characteristic equation $1 - 0.4846 B= 0$, the roots for $B$ is 2.064. The first differenced seasonal MA component has characteristic equation $1 - 0.7583 B^{12}= 0$, the roots for $B^{12}$ is 1.319. All roots exceed unity which means the first differenced series is invertible.
+  
+
+### Forecast until 2020
+
+(A.ii) What does the unemployment rate look like at the end of 2020? How credible is this estimate?
+
+```{r}
+#817 2016 Jan
+#forecast.sarima.ts = ts(forecast(m.diff.3,h=60)$mean, start = c(2016,1), frequency = 12)
+  
+par(mfrow = c(2,1))
+
+#forecast out to Dec 2020 
+plot(forecast(m.diff.3,h=60))
+plot(forecast(m.diff.3,h=60),xlim=c(800,876))
+```
+
+```{r}
+dec2020<-forecast(m.diff.3,h=60)
+cat("Forecast 2020 December -- Expected Value", 
+    dec2020$mean[60], "\n")
+cat("Forecast 2020 December -- 95% Lower Confidence Bound", 
+    dec2020$lower[60,2], "\n")
+cat("Forecast 2020 December -- 95% Upper Confidence Bound", 
+    dec2020$upper[60,2], "\n")
+```
+
+As we can see from the forecast time plots above, the confidence bound of forecast expand drastically towards 2020. Although the mean value is expected to be $2.5835$, this estimate is not very credible. The wide point estimates of confidence bound covers zero so we don't even know if unemployment will be positive or negative!
+
+
+(B) Build a linear time-regression and incorporate seasonal effects. Be sure to evaluate the residuals and assess this model on the basis of the assumptions of the classical linear model, and then produce a 1 year and a 4 year forecast.
+
+```{r}
+#define t
+unem$t<-seq(1:834)
+#get the month from t (0=Dec, 1=Jan, etc.)
+df$month<-df$t%%12
 ```
 

@@ -293,3 +293,7 @@ To remove linear trend it is necessary to difference once with lag 1. Because in
 -------------------------------------------------------------
 Q2.
 
+For seasonal differenced models, we reduced from the top AIC candidate, SARIMA(4,0,3,0,1,1) to SARIMA(2,0,1,0,1,1) and retain white noise residual behavior. SARIMA(1,0,3)(2,1,3) starts to show significant pacfs at lag 4 and 5, therefore we stop search from there downwards. We will keep these three candidates to compare out of sample performance.
+
+For first differenced models, we reduced from the top AIC candidate, SARIMA(8,1,3,1,0,1) to SARIMA(1,1,1,1,0,1) and retain white noise residual behavior. SARIMA(1,1,0)(1,0,1) starts to show significant pacfs at lag 2, 3 and 5, and SARIMA(1,1,0)(1,0,0) starts to show significant pacfs at seasonal lags, therefore we stop search from there downwards. We will keep these three candidates to compare out of sample performance. We will keep these four candidates to compare out of sample performance.
+
