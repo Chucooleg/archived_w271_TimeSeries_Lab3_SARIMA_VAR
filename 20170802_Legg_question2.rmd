@@ -15,6 +15,7 @@ library(moments)
 library(psych)
 library(forecast)
 library(tseries)
+library(effects)
 
 unem.data = read.csv("UNRATENSA.csv", header = T)
 auto.data = read.csv("TOTALNSA.csv", header = T)
@@ -504,13 +505,13 @@ plot(forecast(m.diff.3,h=60),xlim=c(800,876))
 ```
 
 ```{r}
-dec2020<-forecast(m.diff.3,h=60)
+f.diff.3.2020<-forecast(m.diff.3,h=60)
 cat("Forecast 2020 December -- Expected Value", 
-    dec2020$mean[60], "\n")
+    f.diff.3.2020$mean[60], "\n")
 cat("Forecast 2020 December -- 95% Lower Confidence Bound", 
-    dec2020$lower[60,2], "\n")
+    f.diff.3.2020$lower[60,2], "\n")
 cat("Forecast 2020 December -- 95% Upper Confidence Bound", 
-    dec2020$upper[60,2], "\n")
+    f.diff.3.2020$upper[60,2], "\n")
 ```
 
 As we can see from the forecast time plots above, the confidence bound of forecast expand drastically towards 2020. Although the mean value is expected to be $2.5835$, this estimate is not very credible. The wide point estimates of confidence bound covers zero so we don't even know if unemployment will be positive or negative!
@@ -519,9 +520,275 @@ As we can see from the forecast time plots above, the confidence bound of foreca
 (B) Build a linear time-regression and incorporate seasonal effects. Be sure to evaluate the residuals and assess this model on the basis of the assumptions of the classical linear model, and then produce a 1 year and a 4 year forecast.
 
 ```{r}
-#define t
-unem$t<-seq(1:834)
-#get the month from t (0=Dec, 1=Jan, etc.)
-df$month<-df$t%%12
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 50)
+
+unem.k.smooth.wide = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 25)
+
+unem.k.smooth.narrow = ksmooth(time(unem.ts), 
+                               unem.ts, kernel = c("normal"), 
+                               bandwidth = 10)
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Quadratic time trend")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, 
+      col = "black", lty = "dotted")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, 
+      col = "black", lty = "solid", lwd = 2)
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, 
+      col = "black", lty = "dotdash")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
 ```
 
+Continuing the insights from our EDA, the time series of unemployment rate has an upward trend and show some quadratic behavior. Therefore we can estimate a model with quadratic term of time. We attempt to explain seasonal behavior using a dummy variable for each month. Candidate Models are:
+
+$$X_t = \beta_0 + \beta_t time + \beta_m month + \epsilon$$
+
+$$X_t = \beta_0 + \beta_t time + \beta_{t2} time^2 +  \mathbf{\beta_m} \mathbf{month} + \epsilon$$
+
+where time is an annual unit, each additional month is expressed as a fraction of the year. "month" is an categorical variable that is broken down into indicator variables.
+
+```{r}
+# Preparing data
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1)) 
+
+unem.train.ts = window(unem.ts, end = c(2015,12))
+unem.test.ts = window(unem.ts, start = c(2016,01))
+
+y.lm = as.numeric(unem.train.ts)
+t.lm = as.numeric(time(unem.train.ts))
+mon.lm = as.factor(cycle(unem.train.ts))
+```
+
+```{r}
+unem.lm = lm(y.lm ~ t.lm + mon.lm)
+unem.lm.quad = lm(y.lm ~ t.lm + I(t.lm^2) + mon.lm)
+
+AIC(unem.lm)
+AIC(unem.lm.quad)
+```
+
+```{r}
+summary(unem.lm.quad)
+```
+
+```{r}
+library(sandwich)
+car::linearHypothesis(unem.lm.quad, c("mon.lm2 = 0", "mon.lm3 = 0",
+                                      "mon.lm4 = 0", "mon.lm5 = 0",
+                                      "mon.lm6 = 0", "mon.lm7 = 0",
+                                      "mon.lm8 = 0", "mon.lm9 = 0",
+                                      "mon.lm10 = 0", "mon.lm11 = 0",
+                                      "mon.lm12 = 0"), vcov = vcovHC)
+```
+
+Our quadratic model perform slightly better than the linear model by AIC and Adjusted R-squared. The F-statistic and F-test p-value strongly reject that null hypothesis that our coefficients are not jointly significant thus support explanatory power of our model. The second F-test result also provide evidence that our month variable is significant. We will proceed with this quadratic model for a better fit. Our estimated model is specified as:
+
+$$\hat{X_t} = -3389 + 3.396 time - 0.0008487 time^2 +  \beta_m month -0.805\cdot I(Apr) -0.9518\cdot I(May) -0.5144\cdot I(Jul) \\ - 0.8229\cdot I(Aug) - 1 \cdot I(Sep) -1.169 \cdot I(Oct) -0.9982 \cdot I(Nov) -0.9596 \cdot I(Devc)$$
+
+Notice that we have dropped some month indicator variables in the specification, because they are not statistical different from the base variable January. Along with the negative sign of the significant indicator variables, the estimations agrees with our earlier month plot in the EDA section that the beginning and middle of each year tend to have higher unemployment rates.
+
+```{r}
+plot(effects::allEffects(unem.lm.quad)[c(1,3)], 
+     main = "Effect Plots")
+```
+
+The time effect plot above shows the fitted curve with a positive, gradually leveling slope and expanding confidence interval with the increase in time. Also, the month effect plot show discrete levels and the model clearly discriminate early and mid year from the other months. Both plots align with our EDA findings. To further examine the internal validity of our model, we evaluate the validity of our model by the 6 CLM assumptions:
+
+1. Linearity in Parameters: This is a weak assumption, we have specified our model with linear coefficients.
+
+2. Random sample of data: We clealy have violated this assumption because the observations are serially correlated, as demonstrated in the autocorrelation plots in the EDA. The strongly time dependent residuals plotted below demonstrates that our observations could not have been independent in the first place.
+
+```{r}
+plot(unem.lm.quad$residuals, type = "l", 
+     main = "Residuals Time Plot - linear regression model")
+```
+
+3. No perfect co-linearity: Each year has 12 months, therefore the time variable is not correlated with month.
+
+4. Zero-conditional mean. From the residuals vs fitted value plot, there is a clear curvature of the loess curve from line zero. We tried a separate model with the cubic term of time but the curvature was only flipped not flattened. We could be missing an important variable here. This assumption is violated.
+
+```{r}
+par(mfrow = c(1,2))
+plot(unem.lm.quad, which = 1)
+plot(unem.lm.quad, which = 3)
+abline(h = c(sqrt(2),sqrt(3)), col = "green", lty = "dotted")
+```
+
+5. Homoskedasticity of errors: The variance of residuals noticeably expand towards higher fitted values. The Loess curve on the scale-location plot clearly picks up at the same time. The Breusch-Pagan test strongly reject the null hypothesis of homoskedasticity. This assumption is violated. 
+
+```{r}
+lmtest::bptest(unem.lm.quad)
+```
+
+6. Normally distributed error: From the normal QQ plot and histogram, our residuals are clearly right skewed. The Shapiro test also strongly reject the null hypothesis that our residuals are normally distributed.
+
+```{r}
+par(mfrow = c(1,2))
+hist(unem.lm.quad$residuals, xaxt = "n",
+     main = "Residuals of linear regression model")
+axis(side = 1, at = seq(-2.5,4.5,0.5))
+abline(v = mean(unem.lm.quad$residuals), col = "red")
+abline(v = median(unem.lm.quad$residuals), col = "green")
+legend("topright", legend = c("Mean", "Median"),
+       col = c("red", "green"), bty = "n", 
+       lty = c("solid", "solid"))
+
+plot(unem.lm.quad, which = 2)
+```
+
+```{r}
+shapiro.test(unem.lm.quad$residuals)
+```
+
+7. Outlier Analysis (Not an CLM assumption): From the scale-location plot above, we see a number of standardized residuals lying outside the threshold of 2 and 3 standard deviations. This says that our model represents variations in our data poorly. None of the observations are close to cook's distance of 0.5 so there are no extreme outliers.
+
+```{r}
+par(mfrow = c(1,2))
+plot(unem.lm.quad, which = 5)
+abline(h = c(2,3), col = "green", lty = "dotted")
+plot(unem.lm.quad, which = 4)
+```
+
+(B.i) How well does your model predict the unemployment rate up until June 2017?
+(B.ii) What does the unemployment rate look like at the end of 2020? How credible is this estimate?
+(B.iii) Compare this forecast to the one produced by the SARIMA model. What do you notice?
+
+### Prediction up until 2017
+
+```{r}
+test.time = seq(2015,2017.417,by = (1/12))
+test.month = c(seq(1,12),seq(1,6))
+
+test.prediction = predict.lm(object = unem.lm.quad, se.fit = T,
+           newdata = data.frame(t.lm = test.time, mon.lm = as.factor(test.month)))
+```
+
+```{r}
+data.frame("year" = floor(test.time),
+           "month" = test.month,
+           "lm mean" = test.prediction$fit,
+           "lm error" = test.prediction$fit - unem.test$UNRATENSA,
+           "SARIMA mean" = as.numeric(f.diff.3$mean),
+           "SARIMA error" = as.numeric(f.diff.3$mean) - unem.test$UNRATENSA)
+```
+
+```{r}
+sarima.err = as.numeric(f.diff.3$mean) - unem.test$UNRATENSA 
+lm.err = test.prediction$fit - unem.test$UNRATENSA
+
+sarima.rmse = sqrt(mean(sarima.err^2))
+lm.rmse = sqrt(mean(lm.err^2))
+
+cat("SARIMA RMSE: ",sarima.rmse, "\n")
+cat("Linear model RMSE: ",lm.rmse, "\n")
+```
+
+In comparison with the ARIMA model, the linear regression model has much poorer out-of-sample performance. The above table shows that the linear model predictions are consistently off by 1 to 2 units, while the SARIMA model predictions are only off from -0.4 to +0.2 units. Also, the RMSE of our SARIMA model is only less than 10% of the RMSE of the linear model. 
+
+```{r}
+plot(unem.ts, xlim = c(1948,2017.417),
+     main = "Raw Series vs Model Fits")
+
+lines(y = unem.lm.quad$fit, x = t.lm, col = "pink")
+lines(y = test.prediction$fit, x = test.time, col = "red")
+
+lines(y = m.diff.3$fitted, x = t.lm, col = "cyan")
+lines(y = as.numeric(f.diff.3$mean), x = test.time, col = "blue")
+
+legend("topleft", col = c("cyan","blue","pink","red","black"),
+       legend = c("SARIMA In-sample-fit",
+                  "SARIMA out-of-sample predictions",
+                  "lm In-sample-fit",
+                  "lm out-of-sample predictions",
+                  "raw series"), 
+       bty = "n", lty = c("solid","solid","solid","solid","solid"))
+
+```
+
+The above long-term time plot shows that the fitted curve if our linear model fails to pick up most of the random walk variations in the raw series, while the step by step fit of the SARIMA model is quite close. Unless we fit a very high order term for time, it's impossible for the linear model to pick up such variations. On the other hand, seasonal patterns is reasonably approximated by both models, we can see the small ripples in the raw series replicated and matched by both fitted curves.
+
+```{r}
+plot(unem.ts, xlim = c(2016,2017.417), ylim = c(0,9),
+     main = "Out of sample fit vs Test data")
+
+lines(y = test.prediction$fit, x = test.time, col = "red")
+lines(y = test.prediction$fit + 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+lines(y = test.prediction$fit - 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+
+lines(y = f.diff.3$mean, x = test.time, col = "blue")
+lines(y = as.numeric(f.diff.3$lower[,2]), 
+      x = test.time, col = "blue", lty = "dotted")
+lines(y = as.numeric(f.diff.3$upper[,2]), 
+      x = test.time, col = "blue", lty = "dotted")
+
+legend("bottomleft", col = c("blue","red","black"),
+       legend = c("SARIMA out-of-sample predictions",
+                  "lm out-of-sample predictions",
+                  "raw series"), 
+       bty = "n", lty = c("solid","solid","solid"))
+```
+
+Within our test region, we see a clear trade-off between the two models. On the one hand, the mean estimates of the SARIMA model is quite close to the test data but its confidence bound widens drastically towards mid 2017 so our predictions lack precision. On the other hand for the linear model, even the lower bound of the estimates are consistently far above the test data. However, the confidence bound is quite narrow. Therefore, the SARIMA model makes less biased but less precise estimates and the linear model makes more biased but more precise estimates.
+
+### Forecast in 2020
+
+```{r}
+new.time = seq(2017.500,2020.917,by = (1/12))
+new.month = c(seq(7,12),seq(1,12),seq(1,12),seq(1,12))
+
+new.prediction = predict.lm(object = unem.lm.quad, se.fit = T,
+           newdata = data.frame(t.lm = new.time, mon.lm = as.factor(new.month)))
+
+
+new.df = data.frame("year" = floor(new.time),
+           "month" = new.month,
+           "lm mean estimate" = new.prediction$fit,
+           "lm upper estimate" = new.prediction$fit + 1.96* new.prediction$se.fit,
+           "lm lower estimate" = new.prediction$fit - 1.96* new.prediction$se.fit)
+
+tail(new.df, 12)
+```
+
+The above table shows that forecast of the linear model in 2020 oscillates within 5.5 percent and 6.8 percent. Its confidence intervals don't seem to fluctuate much either.
+
+```{r}
+plot(unem.ts, xlim = c(2015,2020.917), ylim = c(-7,12),
+     main = "Forecast until end of 2020")
+
+lines(y = unem.lm.quad$fit, x = t.lm, col = "pink")
+
+lines(y = test.prediction$fit, x = test.time, col = "red")
+lines(y = test.prediction$fit + 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+lines(y = test.prediction$fit - 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+
+lines(y = new.prediction$fit, x = new.time, col = "red")
+lines(y = new.prediction$fit + 1.96* new.prediction$se.fit,
+      x = new.time, col = "red",lty = "dotted")
+lines(y = new.prediction$fit - 1.96* new.prediction$se.fit,
+      x = new.time, col = "red",lty = "dotted")
+
+lines(y = m.diff.3$fitted, x = t.lm, col = "cyan")
+
+lines(y = f.diff.3.2020$mean, x = c(test.time,new.time), col = "blue")
+lines(y = as.numeric(f.diff.3.2020$lower[,2]), 
+      x = c(test.time,new.time), col = "blue", lty = "dotted")
+lines(y = as.numeric(f.diff.3.2020$upper[,2]), 
+      x = c(test.time,new.time), col = "blue", lty = "dotted")
+
+legend("bottomleft", col = c("blue","cyan","red","pink", "black"),
+       legend = c(" SARIMA forecast", "SARIMA fitted",
+                  "linear model forecast", "linear model fitted",
+                  "raw series"), 
+       bty = "n", lty = c("solid","solid","solid","solid"))
+```
+
+The time plot above show that the linear model's mean forecasts oscillates around level 6 without clear upward or downward overall trend.  So does its confidence bound. On the other hand the SARIMA model's mean forecast continues the slight downward trend of the raw series and its confidence bound expands drastically to even below zero in 201, which doesn't make much sense. For these reasons, we deem neither models credible to forecast unemployment rate as far as the end of 2020.
