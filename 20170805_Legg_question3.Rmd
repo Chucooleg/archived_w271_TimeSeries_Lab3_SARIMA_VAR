@@ -444,8 +444,26 @@ where the two respective residual series are bivariate white noises.
 To check for stationarity, the characteristic function can be evaluated using the determinant:
 
 \begin{align*}
+\hat{x_t} = -0.002672 - 0.002955 \cdot x_{t-1} - 0.0003424\cdot y_{t-1} + 0.1641 \cdot x_{t-2} -0.0002699\cdot y_{t-2} \\
++ 0.1591 \cdot x_{t-3} - 0.0001394 \cdot y_{t-3} -1.075 \cdot sd1 - 1.304 \cdot sd2 - 1.455 \cdot sd3 - 0.8404 \cdot sd4 \\ 
+- 0.2696 \cdot sd5 - 0.8708 \cdot sd6 - 1.24 \cdot sd7 - 1.176 \cdot sd8 - 1.034 \cdot sd9 - 0.7967 \cdot sd10 \\ 
+- 0.9107 \cdot sd11
+\end{align*}
+
+\begin{align*}
+\hat{y_t} = 1.68305 -59.89492 \cdot x_{t-1} -0.61689\cdot y_{t-1} -20.10760 \cdot x_{t-2} -0.48635\cdot y_{t-2} \\
+-25.04746 \cdot x_{t-3} -0.24112 \cdot y_{t-3} + 254.58641 \cdot sd1 + 429.29052 \cdot sd2 + 238.22932 \cdot sd3 \\
++ 323.25969 \cdot sd4  + 194.73408 \cdot sd5 + 119.09833 \cdot sd6 + 160.63555 \cdot sd7 + 27.27200 \cdot sd8 \\
++ 89.38955 \cdot sd9 + 17.67736 \cdot sd10 + 184.94625 \cdot sd11
+\end{align*}
 
 
+where the two respective residual series are bivariate white noises.
+
+To check for stationarity, the characteristic function can be evaluated using the determinant:
+
+\begin{align*}
+&
 \left | \begin{pmatrix}
 1 & 0\\ 
 0 & 1
@@ -463,29 +481,19 @@ To check for stationarity, the characteristic function can be evaluated using th
 -25.04746 & -0.24112
 \end{pmatrix}B^3
 \right | \\
-
-=
-
+&=
 \begin{vmatrix}
 (1+0.002955B-0.1641B^2-0.1591B^3) & (0.0003424B+0.0002699B^2+0.0001394B^3)\\ 
 (59.89492B+20.10760B^2+25.04746B^3) & (1+0.61689B+0.48635B^2+0.24112B^3) \\
-\end{vmatrix}
-
-= (1+0.002955B-0.1641B^2-0.1591B^3)(1+0.61689B+0.48635B^2+0.24112B^3) \\
-- (0.0003424B+0.0002699B^2+0.0001394B^3)(59.89492B+20.10760B^2+25.04746B^3) \\
-
-= (-0.038362192B^6 - 0.116946077B^5 - 0.1772447244B^4 - 0.01777448474999999B^3 + 0.32407290995B^2 + 0.6198450000000001B + 1) \\ - (0.003491615924B^6+0.009563308894B^5+0.022352643392B^4+0.023050481148B^3+0.020508020608B^2) \\
-
-= -0.04185381B^6 -0.1265094B^5 - 0.1995974B^4 -0.04082497
-
+\end{vmatrix}\\
+&= -0.04185381B^6 -0.1265094B^5 - 0.1995974B^4 -0.04082497B^3 + 0.3035649B^2 + 0.6198450000000001B + 1
 \end{align*}
-
 
 
 From this it can be verified that the fitted VAR(3) model is stationary since all the roots exceed unity in absolute value:
 
 ```{r}
-
+Mod(polyroot(c(1,0.6198450000000001,0.3035649,-0.04082497,-0.1995974,-0.1265094,-0.04185381)))
 ```
 
 
