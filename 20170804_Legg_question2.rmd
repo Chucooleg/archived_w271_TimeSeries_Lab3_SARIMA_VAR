@@ -21,20 +21,21 @@ unem.data = read.csv("UNRATENSA.csv", header = T)
 auto.data = read.csv("TOTALNSA.csv", header = T)
 ```
 
-#Question 2: SARIMA
-
-It is Dec 31, 2016 and you work for a non-partisan think tank focusing on the state of the US economy. You are interested in forecasting the unemployment rate through 2017 (and then 2020) to use it as a benchmark against the incoming administrations economic performance. Use the dataset UNRATENSA.csv and answer the following:
-
-(A) Build a SARIMA model using the unemployment data and produce a 1 year forecast and then a 4 year forecast. Because it is Dec 31, 2016, leave out 2016 as your test data.
-
 ```{r}
 unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
 auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
+
 unem.train = unem.data[0:816,]
 unem.test = unem.data[817:834,]
 unem.train.ts = ts(unem.train$UNRATENSA)
 unem.test.ts = ts(unem.test$UNRATENSA)
 ```
+
+#Question 2: SARIMA
+
+It is Dec 31, 2016 and you work for a non-partisan think tank focusing on the state of the US economy. You are interested in forecasting the unemployment rate through 2017 (and then 2020) to use it as a benchmark against the incoming administrations economic performance. Use the dataset UNRATENSA.csv and answer the following:
+
+(A) Build a SARIMA model using the unemployment data and produce a 1 year forecast and then a 4 year forecast. Because it is Dec 31, 2016, leave out 2016 as your test data.
 
 
 ## Construct and Loop through search spaces

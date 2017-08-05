@@ -19,3 +19,56 @@ summary(dum.m)
 ```
 
 
+```{r}
+var.diff.mod.lag12 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 12, season = 12) 
+
+# 1st differenced & seasonal dummies
+# p = 12
+par(mfrow = c(2,2))
+acf(residuals(var.diff.mod.lag12)[,1],104, main = "")
+title("Residuals: diff1 : unem :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,1],104,main = "")
+title("Residuals: diff1 : unem :p = 12")
+
+acf(residuals(var.diff.mod.lag12)[,2],104, main = "")
+title("Residuals: diff1 : auto :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,2],104,main = "")
+title("Residuals: diff1 : auto :p = 12")
+```
+
+```{r}
+var.diff.mod.lag11 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 11, season = 12) 
+
+# 1st differenced & seasonal dummies
+# p = 12
+par(mfrow = c(2,2))
+acf(residuals(var.diff.mod.lag11)[,1],104, main = "")
+title("Residuals: diff1 : unem :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,1],104,main = "")
+title("Residuals: diff1 : unem :p = 11")
+
+acf(residuals(var.diff.mod.lag11)[,2],104, main = "")
+title("Residuals: diff1 : auto :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,2],104,main = "")
+title("Residuals: diff1 : auto :p = 11")
+```
+
+```{r}
+var.diff.mod.lag10 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 10, season = 12) 
+
+# 1st differenced & seasonal dummies
+# p = 10
+par(mfrow = c(2,2))
+acf(residuals(var.diff.mod.lag10)[,1],104, main = "")
+title("Residuals: diff1 : unem :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,1],104,main = "")
+title("Residuals: diff1 : unem :p = 10")
+
+acf(residuals(var.diff.mod.lag10)[,2],104, main = "")
+title("Residuals: diff1 : auto :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,2],104,main = "")
+title("Residuals: diff1 : auto :p = 10")
+```

@@ -15,12 +15,18 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
 library(moments)
 library(psych)
+library(forecast)
+library(tseries)
+library(effects)
+
+unem.data = read.csv("UNRATENSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
 ```
 
 
 ```{r}
-unem.data = read.csv("UNRATENSA.csv", header = T)
-auto.data = read.csv("TOTALNSA.csv", header = T)
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
+auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
 ```
 
 # EDA
@@ -49,11 +55,6 @@ Both datasets are time indexed, accompanied with a key variable of interests. Wi
 ## Time series Overview
 
 ### Time plots and Histograms
-
-```{r}
-unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
-auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
-```
 
 ```{r}
 ts.plot(unem.ts); title("Unemployment Rate 1948-01 to 2017-06"); 
@@ -433,10 +434,24 @@ As expected with the raw series, the ADF test failed to reject the null hypothes
 
 ### Unemployment series stationarity conclusion
 
-Although some plots show more volatile behavior of the series before mid-1960s, we decide not to truncate the series because the random walk behavior, seasonal pattern, spikes magnitude and slight upward trend seem consistent through the entire series. We believe the generating process underlying unemployment rate is similar enough from 1948 to 2017 that keeping all observations will provide more precise estimates.
+Although some plots show more volatile behavior of the series before mid-1960s, we decide not to truncate the series because the random walk behavior, seasonal pattern, spikes magnitude and slight upward trend seem consistent through the entire series. We believe the generating process underlying unemployment rate is similar enough from 1948 to 2017 that keeping all observations will provide more precise estimates. Refer to the correlation plots below, the acf and pacf plots of the series before and after mid-1960s are fairly similar. Both split series exhibit strong AR(1) behavior and some seasonal patterns. (Note that the shorter decay in the split series before 1964 can be attributed to a substantially smaller sample size)
 
 Regarding first differencing, all of our plots and tests suggests strong random walk behavior with the raw series, so it is recommended. Regarding additional seasonal differencing, the results were contradictory. The monthly, acf and pacf plots suggest noticeable seasonal pattern, while the scatterplot matrix doesn't. The unit test suggested that either first or seasonal differencing can help us to establish a stationary series. At this stage, we remain open to a first differenced, or first differenced in additional to seasonal differenced model. We defer to the modeling and forecasting results to determine the best candidate.
 
+```{r}
+unem.ts.til1964 = window(x = unem.ts, end = c(1964,12))
+unem.ts.from1964 = window(x = unem.ts, start = c(1965,1))
+
+par(mfrow = c(2,2))
+acf(unem.ts.til1964, main = "", lag.max = 36)
+title("Before 1964 Dec")
+pacf(unem.ts.til1964, main = "", lag.max = 36)
+title("Before 1964 Dec")
+acf(unem.ts.from1964, main = "", lag.max = 36)
+title("After 1964 Dec")
+pacf(unem.ts.from1964, main ="", lag.max = 36)
+title("After 1964 Dec")
+```
 
 
 ### Seasonality and Unit Root Investigation -- unemployment rate
@@ -786,7 +801,7 @@ axis(side = 1, at = seq(-5,5,0.5))
 title("Seasonal Differenced Series: Auto sales vs Unemployment")
 ```
 
-Above plot: cross-correlation for the seasonal differenced series show obvious gradual decay around lag 5-6 and 36, which can be the effect of the inherent unit roots. This says that we should try first differencing the two series for the VAR model.
+Above plot: cross-correlation for the seasonal differenced series show obvious gradual decay around lag 3-7 and 36, which can be the effect of the inherent unit roots. This says that we should try first differencing the two series for the VAR model.
 
 ```{r}
 combined.diff.diff12 = ts.intersect(unem.ts.diff.diff12, auto.ts.diff.diff12)

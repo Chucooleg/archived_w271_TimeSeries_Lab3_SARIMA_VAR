@@ -1,0 +1,437 @@
+---
+title: "Lab3 Q3"
+author: "Michelle Kim, Sue Yang, Legg Yeung"
+date: "August 2, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# copied
+library(moments)
+library(psych)
+library(forecast)
+library(tseries)
+library(effects)
+library(vars)
+
+unem.data = read.csv("UNRATENSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
+```
+
+```{r}
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
+auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
+
+unem.train = unem.data[0:816,]
+unem.test = unem.data[817:834,]
+unem.train.ts = ts(unem.train$UNRATENSA)
+unem.test.ts = ts(unem.test$UNRATENSA)
+```
+
+#Question 3: VAR
+
+You also have data on automotive car sales. Use a VAR model to produce a 1 year forecast on both the unemployment rate and automotive sales for 2017 in the US.
+
+Compare the 1 year forecast for unemployment produced by the VAR and SARIMA models, examining both the accuracy AND variance of the forecast. Do you think the addition of the automotive sales data helps? Why or why not?
+
+## Training VAR models
+
+Continuing insights from the EDA, we attempt to train a model for each of the following differencing options:
+
+  -	Both series first differenced and seasonal variable
+  -	Both series seasonal differenced
+  -	Both series first and seasonal differenced
+
+```{r}
+combined.raw = ts.intersect(unem.ts, auto.ts)
+
+combined.raw.train = window(combined.raw, end = c(2015, 12))
+combined.raw.test = window(combined.raw, start = c(2016, 1))
+
+unem.var.train = combined.raw.train[,1]
+auto.var.train = combined.raw.train[,2]
+unem.var.test = combined.raw.test[,1]
+auto.var.test = combined.raw.test[,2]
+```
+
+```{r}
+# 1st differenced
+unem.var.train.diff = diff(unem.var.train)
+auto.var.train.diff = diff(auto.var.train)
+
+# 12th differenced
+unem.var.train.diff12 = diff(unem.var.train, lag = 12)
+auto.var.train.diff12 = diff(auto.var.train, lag = 12)
+
+# 1st & 12th differenced
+unem.var.train.diff.diff12 = diff(diff(unem.var.train), lag = 12)
+auto.var.train.diff.diff12 = diff(diff(auto.var.train), lag = 12)
+```
+
+### Estimate Model Order
+
+```{r}
+# 1st differenced & seasonal dummies
+vars::VARselect(cbind(unem.var.train.diff, auto.var.train.diff), 
+                lag.max = 30, season = 12)
+```
+
+```{r}
+# 12th differenced
+vars::VARselect(cbind(unem.var.train.diff12, auto.var.train.diff12), 
+                lag.max = 30)
+```
+
+```{r}
+# 1st & 12th differenced
+vars::VARselect(cbind(unem.var.train.diff.diff12, auto.var.train.diff.diff12), 
+                lag.max = 30)
+```
+
+Notice that the above VARselect results suggests very different number of lags to include by AICc vs BIC. This is because the two information criteria penalize by different terms. The R documentation shows the following formulation for AICc and BIC.
+
+$$AIC(n) = \ln \hat{\sigma_k^2} + [2k + 2k(k+1)/(n-k-1)]$$
+
+$$SC(n) = \ln \hat{\sigma_k^2} + kIn(n)$$
+
+While first component in each formula are the same and refer to the log of sum square error, the second term, that is the penalty term are different. In general, as sample size n grows, BIC's penalty term grows faster than AICc's penalty term with number of estimated lags k. Therefore, BIC is better at penalizing large samples more consistenly and heavily. Considering our sample size of 479, we should choose the orders estimated by BIC over AICc, if both model residuals exhibit white noise behavior. The estimated orders are:
+
+  -	Both series first differenced and seasonal variable : (Order 3 by BIC) (Order 12 by AIC)
+  -	Both series seasonal differenced : (Order 4 by BIC) (Order 26 by AIC)
+    - Recall from EDA that peak of cross-correlation took place between lag 3-7
+  -	Both series first and seasonal differenced : (Order 12 by BIC) (Order 25 by AIC)
+
+  
+### Residuals Examination
+
+```{r}
+# 1st differenced & seasonal dummies
+var.diff.mod.lag3 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 3, season = 12) 
+
+var.diff.mod.lag12 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 12, season = 12) 
+
+# 12th differenced
+var.diff12.mod.lag4 = vars::VAR(cbind(unem.var.train.diff12, 
+                                      auto.var.train.diff12),
+                                p = 4) 
+
+var.diff12.mod.lag26 = vars::VAR(cbind(unem.var.train.diff12, 
+                                       auto.var.train.diff12),
+                              p = 26) 
+
+# 1st & 12th differenced
+var.diff.diff12.mod.lag12 = vars::VAR(cbind(unem.var.train.diff.diff12, 
+                                           auto.var.train.diff.diff12),
+                              p = 12) 
+
+var.diff.diff12.mod.lag25 = vars::VAR(cbind(unem.var.train.diff.diff12, 
+                                            auto.var.train.diff.diff12),
+                              p = 25) 
+```
+
+We perform the Portmanteau Test on the model residuals to detect autocorrelation. Test hypothesis is as follows:
+  
+  - Ho : The residuals are not serially correlated
+  - Ha : The residuals are serially correlated
+  
+  - The null hypothesis is only rejected for the first differenced model with seasonal variable and 12th lags.
+
+```{r}
+# 1st differenced & seasonal dummies
+vars::serial.test(var.diff.mod.lag3, lags.pt = 30, type = "PT.adjusted")
+vars::serial.test(var.diff.mod.lag12, lags.pt = 30, type = "PT.adjusted")
+
+# 12th differenced
+vars::serial.test(var.diff12.mod.lag4, lags.pt = 30, type = "PT.adjusted")
+vars::serial.test(var.diff12.mod.lag26, lags.pt = 30, type = "PT.adjusted")
+
+# 1st & 12th differenced
+vars::serial.test(var.diff.diff12.mod.lag12, lags.pt = 30, type = "PT.adjusted")
+vars::serial.test(var.diff.diff12.mod.lag25, lags.pt = 30, type = "PT.adjusted")
+```
+
+```{r}
+# 1st differenced & seasonal dummies
+# p = 3
+par(mfrow = c(2,2))
+acf(residuals(var.diff.mod.lag3)[,1],104, main = "")
+title("Residuals: diff1 : unem :p = 3")
+pacf(residuals(var.diff.mod.lag3)[,1],104,main = "")
+title("Residuals: diff1 : unem :p = 3")
+
+acf(residuals(var.diff.mod.lag3)[,2],104, main = "")
+title("Residuals: diff1 : auto :p = 3")
+pacf(residuals(var.diff.mod.lag3)[,2],104,main = "")
+title("Residuals: diff1 : auto :p = 3")
+```
+
+```{r}
+# 1st differenced & seasonal dummies
+# p = 12
+par(mfrow = c(2,2))
+acf(residuals(var.diff.mod.lag12)[,1],104, main = "")
+title("Residuals: diff1 : unem :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,1],104,main = "")
+title("Residuals: diff1 : unem :p = 12")
+
+acf(residuals(var.diff.mod.lag12)[,2],104, main = "")
+title("Residuals: diff1 : auto :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,2],104,main = "")
+title("Residuals: diff1 : auto :p = 12")
+```
+
+```{r}
+# seasonal differenced
+# p = 4
+par(mfrow = c(2,2))
+acf(residuals(var.diff12.mod.lag4)[,1],104, main = "")
+title("Residuals: diff12: unem :p = 4")
+pacf(residuals(var.diff12.mod.lag4)[,1],104,main = "")
+title("Residuals: diff12: unem :p = 4")
+
+acf(residuals(var.diff12.mod.lag4)[,2],104, main = "")
+title("Residuals: diff12: auto :p = 4")
+pacf(residuals(var.diff12.mod.lag4)[,2],104,main = "")
+title("Residuals: diff12: auto :p = 4")
+```
+
+```{r}
+# seasonal differenced
+# p = 26
+par(mfrow = c(2,2))
+acf(residuals(var.diff12.mod.lag26)[,1],104, main = "")
+title("Residuals: diff12: unem :p = 26")
+pacf(residuals(var.diff12.mod.lag26)[,1],104,main = "")
+title("Residuals: diff12: unem :p = 26")
+
+acf(residuals(var.diff12.mod.lag26)[,2],104, main = "")
+title("Residuals: diff12: auto :p = 26")
+pacf(residuals(var.diff12.mod.lag26)[,2],104,main = "")
+title("Residuals: diff12: auto :p = 26")
+```
+
+```{r}
+# 1st differenced & seasonal differenced
+# p = 12
+par(mfrow = c(2,2))
+acf(residuals(var.diff.diff12.mod.lag12)[,1],104, main = "")
+title("Residuals: diff1 diff12: unem :p = 12")
+pacf(residuals(var.diff.diff12.mod.lag12)[,1],104,main = "")
+title("Residuals: diff1 diff12: unem :p = 12")
+
+acf(residuals(var.diff.diff12.mod.lag12)[,2],104, main = "")
+title("Residuals: diff1 diff12: auto :p = 12")
+pacf(residuals(var.diff.diff12.mod.lag12)[,2],104,main = "")
+title("Residuals: diff1 diff12: auto :p = 12")
+```
+
+
+```{r}
+# 1st differenced & seasonal differenced
+# p = 25
+par(mfrow = c(2,2))
+acf(residuals(var.diff.diff12.mod.lag25)[,1],104, main = "")
+title("Residuals: diff1 diff12: unem :p = 25")
+pacf(residuals(var.diff.diff12.mod.lag25)[,1],104,main = "")
+title("Residuals: diff1 diff12: unem :p = 25")
+
+acf(residuals(var.diff.diff12.mod.lag25)[,2],104, main = "")
+title("Residuals: diff1 diff12: auto :p = 25")
+pacf(residuals(var.diff.diff12.mod.lag25)[,2],104,main = "")
+title("Residuals: diff1 diff12: auto :p = 25")
+```
+
+From the residual plots above, the model with first differenced series and seasonal variables perform better in general. Lag order 12 gives residuals that's closest white noise. We reduced it down to lag order 11 with similar white noise pattern, but the Portmanteau Test rejected the null hypothesis that the residuals are not serially correlated. Model of lag order 10 and 9 starts to show significant pacfs at lag 12 therefore we stop search down from there. Time plots and residual plots for lag order 11 and 10 are given below.
+
+```{r}
+var.diff.mod.lag11 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 11, season = 12) 
+vars::serial.test(var.diff.mod.lag11, lags.pt = 30, type = "PT.adjusted")
+
+var.diff.mod.lag10 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 10, season = 12) 
+vars::serial.test(var.diff.mod.lag10, lags.pt = 30, type = "PT.adjusted")
+```
+
+```{r}
+# 1st differenced & seasonal dummies
+# p = 11
+par(mfrow = c(2,4))
+acf(residuals(var.diff.mod.lag11)[,1],104, main = "")
+title("Residuals: diff1 : \n unem :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,1],104,main = "")
+title("Residuals: diff1 : \n unem :p = 11")
+
+acf(residuals(var.diff.mod.lag11)[,2],104, main = "")
+title("Residuals: diff1 : \n auto :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,2],104,main = "")
+title("Residuals: diff1 : \n auto :p = 11")
+
+# p = 10
+acf(residuals(var.diff.mod.lag10)[,1],104, main = "")
+title("Residuals: diff1 : \n unem :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,1],104,main = "")
+title("Residuals: diff1 : \n unem :p = 10")
+
+acf(residuals(var.diff.mod.lag10)[,2],104, main = "")
+title("Residuals: diff1 : \n auto :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,2],104,main = "")
+title("Residuals: diff1 : \n auto :p = 10")
+```
+
+Based on the Portmanteau Tests and residual results, we proceed with the following three models. In all three, both raw series are first differenced and seasonal variables (as indicators) are included in the VAR model.
+
+  - VAR(3), VAR(11) and VAR(12)
+  
+
+## Examine in-sample fit
+
+```{r}
+# Get in-sample-fit by manually adding differenced estimates
+get_insampfit_delta = function(mod, train){
+  na.pad = length(train) - length(fitted(mod)[,1])
+  delta <-c(rep(NA,na.pad),fitted(mod)[,1])
+  insampfit = rep(NA,length(train))
+  for (i in (na.pad+1):480) insampfit[i] <- train[i-1] + delta[i]
+  insampfit
+}
+# var.diff.mod.lag12$y[,1]
+```
+
+```{r}
+insampfit.lag12 = get_insampfit_delta(var.diff.mod.lag12, unem.var.train)
+insampfit.lag11 = get_insampfit_delta(var.diff.mod.lag11, unem.var.train)
+insampfit.lag3 = get_insampfit_delta(var.diff.mod.lag3, unem.var.train)
+
+insampfit.lag12 = ts(insampfit.lag12, start = c(1976,1), frequency = 12)
+insampfit.lag11 = ts(insampfit.lag11, start = c(1976,1), frequency = 12) 
+insampfit.lag3 =  ts(insampfit.lag3, start = c(1976,1), frequency = 12)
+```
+
+```{r}
+plot(unem.var.train, main = "", ylab = "fitted values")
+lines(insampfit.lag11, col = "blue", lty = "dotted")
+lines(insampfit.lag3, col = "green", lty = "dotted")
+lines(insampfit.lag12, col = "red", lty = "dotted")
+title("In Sample Fit")
+
+legend("bottomleft", legend = c("p = 12", "p = 11", "p = 3"),
+       lty = c("dotted","dotted", "dotted"), bty = "n",
+       col = c("red", "blue", "green"))
+```
+
+The in-sample-fit for all three models are very close to the raw series. To further discriminate them, we examine their out-of-sample performance next.
+
+
+### Compare models based on out of sample errors uptil Jun 2017
+
+```{r}
+# Get out-of-sample-performance by manually adding differenced estimates
+# set X_t-1 obs as base
+base = window(combined.raw, start = c(2015,12))[,1] 
+# Function
+get_outsamp = function(mod, base, ahead){
+  pred = predict(mod, n.ahead = ahead)$fcst$unem.var.train.diff
+  delta.estimate = pred[,1]
+  lower.ci = pred[,2]
+  upper.ci = pred[,3]
+  var.fore = rep(0,18)
+  var.low.ci = rep(0,18)
+  var.upp.ci = rep(0,18)
+  for (i in 1:18) var.fore[i] <- base[i] + delta.estimate[i]
+  for (i in 1:18) var.low.ci[i] <- base[i] + lower.ci[i]
+  for (i in 1:18) var.upp.ci[i] <- base[i] + upper.ci[i]
+  data.frame(var.fore,var.low.ci,var.upp.ci)
+}
+```
+
+```{r}
+f.var.3 = get_outsamp(var.diff.mod.lag3, base, 18)
+f.var.11 = get_outsamp(var.diff.mod.lag11, base, 18)
+f.var.12 = get_outsamp(var.diff.mod.lag12, base, 18)
+```
+
+```{r}
+var.fore.df = data.frame("year" = as.numeric(floor(time(unem.var.test))),
+             "month" = c(seq(1,12),seq(1,6)),
+             "VAR3.est" = f.var.3$var.fore,
+             "VAR3.err" = f.var.3$var.fore - as.numeric(unem.var.test),
+             "VAR11.est" = f.var.11$var.fore,
+             "VAR11.err" = f.var.11$var.fore - as.numeric(unem.var.test),   
+             "VAR12.est" = f.var.12$var.fore,
+             "VAR12.err" = f.var.12$var.fore - as.numeric(unem.var.test) )
+
+var.fore.df
+```
+
+```{r}
+cat("VAR(12) RMSE: ", sqrt(mean((var.fore.df$VAR12.err)^2)), "\n")
+cat("VAR(11) RMSE: ", sqrt(mean((var.fore.df$VAR11.err)^2)), "\n")
+cat("VAR(3) RMSE: ", sqrt(mean((var.fore.df$VAR3.err)^2)), "\n")
+```
+
+In terms of out-of-sample comparison, the VAR(3) performs marginally better than the other two. This is a small contradiction with the residual plot studies and serial correlation test. Instead, the RMSE results align with the preferred lag order estimated by BIC. Recall that the RMSE for our SARIMA(2,1,1)(1,0,1) is 0.1472144, so the SARIMA model is still better in terms of out-of-sample performance.
+
+The three VAR models perform very closely, as illustrated by the forecast plot below. The VAR(3) forecast appears more sensitive to the observations at June 2016, which is probably the reason that its RMSE is lower than the other two models. Notice that the confidnce bound of all three VAR models are narrower and more consistent than the SARIMA(2,1,1)(1,0,1) model.
+
+```{r}
+plot(unem.var.test, ylim = c(3.5,6), 
+     main = "Out-of-sample forecasts", lwd = 2)
+
+lines(y = f.var.3$var.fore,x = as.numeric(time(unem.var.test)),col = "green")
+lines(y = f.var.11$var.fore,x = as.numeric(time(unem.var.test)),col = "blue")
+lines(y = f.var.12$var.fore,x = as.numeric(time(unem.var.test)),col = "red")
+
+lines(y = f.var.3$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "green", lty = "dotted")
+lines(y = f.var.3$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "green", lty = "dotted")
+lines(y = f.var.11$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "blue", lty = "dotted")
+lines(y = f.var.11$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "blue", lty = "dotted")
+lines(y = f.var.12$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+lines(y = f.var.12$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+
+legend("bottomleft", legend = c("p = 12","p = 11","p = 3","test series"),
+       lty = c("solid","solid", "solid", "solid"), bty = "n",
+       col = c("red", "blue", "green", "black"))
+```
+
+### Final Model
+
+Given that the residuals of the VAR(3) model has very mild serial correlation, marginally better RMSE and much lower lag order than the VAR(11) and VAR(12) models, we should strongly consider it as the final choice. In the following, we examine the significance and interpretation of its coefficients.
+
+```{r}
+summary(var.diff.mod.lag3)
+```
+
+From the model summary, we observe that: 
+
+  1) coefficients of auto sales lags are generally significant and negative, this confirms our intuition in the EDA that auto sales leads unemployment rate in opposite directions. 
+  
+  2) coefficients of unemployment lags on unemployment rate are close to zero or generally positive, this is somewhat intuitive. If unemployment rate was high 2-3 months ago, it will probably stay high especially in times of persistent economic boom or busts. 
+  
+  3) coefficients of unemployment lags are not significant on autosales, this confirms our EDA insight that auto sales leads unemployment, not the other way round.
+
+
+(!!!! Missing VAR(3) Model specification, and checking for stationarity using determinant of theta matrix)
+
+
+### Comparing the VAR(3) model against the SARIMA(2,1,1)(1,0,1) model: 
+
+In terms of in sample fit, both models approximates the raw series well, as depicted by the earlier time plots. In terms of out-of-sample 18 steps ahead performance, both models had close RMSE measures. The two models are so similar in these accuracy measures possibly because : 1)Both VAR and SARIMA models perform step by step forecast that take advantage of autocorrelations with the series's own lags, with heavy reliance on the past observations in the raw series. This is very different from the linear regression model, which can only predict with the time indexes, information is much more restricted. 2) Both the VAR(3) and SARIMA(2,1,1)(1,0,1) models are integrated by order 1 (first differenced series as input) and incorporate AR components of similar order. 
+
+However, variance of their forecasts are very different. Variance of the SARIMA model grow drastically with time because its step-by-step forecast has to depend heavier and heavier on estimated instead of observed lag values as time increases. Each estimated lag value contributes its own variance(uncertainty) towards the next forecast. On the other hand, although the VAR model has similar forecast mechanism, has much more consistant forecast variance. Because by accounting for cross-correlation in the raw series and thus modeling residuals as bivariate white noise, VAR mechanism manages to impose heavier structure on the residuals(thus coefficient estimates and forecasts) so they seem more restricted than the SARIMA model.
+
+One may be surpised that the VAR(3) model does not perform much better than the SARIMA(2,1,1)(1,0,1) model, given that we have useful information of auto sales that leads unemployment rate. This is because: 1) The VAR model limits us to auto-regressive terms, whereas the SARIMA model allow moving average terms to directly account for moving average components. 2) The VAR model can only account for seasonal patterns with indicator variables, we are deprived of the option to accound for seasonal auto-regressive or seasonal moving average terms.
+
+In conclusion, to forecast unemployment rate, one can consider a SARIMA model for more unbiased estimators, or a VAR model for more precise predictions.
