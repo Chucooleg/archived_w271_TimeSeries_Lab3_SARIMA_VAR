@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -5,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Michelle's model
 
-```{r}
+```{r, eval = F}
 unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1)) 
 unem.train.ts = window(unem.ts, end = c(2015,12))
 unem.test.ts = window(unem.ts, start = c(2016,01))
@@ -19,56 +24,23 @@ summary(dum.m)
 ```
 
 
-```{r}
-var.diff.mod.lag12 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
-                              p = 12, season = 12) 
 
-# 1st differenced & seasonal dummies
-# p = 12
-par(mfrow = c(2,2))
-acf(residuals(var.diff.mod.lag12)[,1],104, main = "")
-title("Residuals: diff1 : unem :p = 12")
-pacf(residuals(var.diff.mod.lag12)[,1],104,main = "")
-title("Residuals: diff1 : unem :p = 12")
-
-acf(residuals(var.diff.mod.lag12)[,2],104, main = "")
-title("Residuals: diff1 : auto :p = 12")
-pacf(residuals(var.diff.mod.lag12)[,2],104,main = "")
-title("Residuals: diff1 : auto :p = 12")
-```
-
-```{r}
-var.diff.mod.lag11 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
-                              p = 11, season = 12) 
-
-# 1st differenced & seasonal dummies
-# p = 12
-par(mfrow = c(2,2))
-acf(residuals(var.diff.mod.lag11)[,1],104, main = "")
-title("Residuals: diff1 : unem :p = 11")
-pacf(residuals(var.diff.mod.lag11)[,1],104,main = "")
-title("Residuals: diff1 : unem :p = 11")
-
-acf(residuals(var.diff.mod.lag11)[,2],104, main = "")
-title("Residuals: diff1 : auto :p = 11")
-pacf(residuals(var.diff.mod.lag11)[,2],104,main = "")
-title("Residuals: diff1 : auto :p = 11")
-```
-
-```{r}
-var.diff.mod.lag10 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
-                              p = 10, season = 12) 
-
-# 1st differenced & seasonal dummies
-# p = 10
-par(mfrow = c(2,2))
-acf(residuals(var.diff.mod.lag10)[,1],104, main = "")
-title("Residuals: diff1 : unem :p = 10")
-pacf(residuals(var.diff.mod.lag10)[,1],104,main = "")
-title("Residuals: diff1 : unem :p = 10")
-
-acf(residuals(var.diff.mod.lag10)[,2],104, main = "")
-title("Residuals: diff1 : auto :p = 10")
-pacf(residuals(var.diff.mod.lag10)[,2],104,main = "")
-title("Residuals: diff1 : auto :p = 10")
-```
+\begin{align*}
+\left | \begin{pmatrix}
+1 & 0\\ 
+0 & 1
+\end{pmatrix}
+-  \begin{pmatrix}
+-0.002955 & - 0.0003424\\ 
+-59.89492 & -0.61689
+\end{pmatrix}B 
+-  \begin{pmatrix}
+0.1641 & -0.0002699\\ 
+-20.10760 & -0.48635
+\end{pmatrix}B^2
+-  \begin{pmatrix}
+0.1591 & - 0.0001394\\ 
+-25.04746 & -0.24112
+\end{pmatrix}B^3
+\right |
+\end{align*}

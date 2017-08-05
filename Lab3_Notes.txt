@@ -321,11 +321,11 @@ I also wrote answers for the sub-questions about forecast, prediction and model 
 
 
 -------------------------------------------------------------
-Q.3
+Q.2B) Model Specification: needs line break. There is also a redundant term (\beta_m month) pls delete (my bad).
 
+-0.038362192x^6-0.116946077x^5-0.1772447244x^4-0.01777448474999999x^3+0.32407290995x^2+.6198450000000001x+1-0.003491615924x^6 - 0.009563308894x^5 - 0.022352643392x^4 - 0.023050481148x^3 - 0.020508020608x^2
 
+0.003491615924x^6 + 0.009563308894x^5 + 0.022352643392x^4 + 0.023050481148x^3 + 0.020508020608x^2
 
-tseries::ar ---> find best order using AIC
+-0.041853807924x^6 - 
 
-vars::VARselect --> look for best order using AIC, HQ, SC, FPE
-vars::VAR  ---> we specify the order (OLS)
