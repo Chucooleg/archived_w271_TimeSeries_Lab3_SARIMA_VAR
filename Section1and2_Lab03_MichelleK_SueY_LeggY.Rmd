@@ -1,0 +1,2381 @@
+---
+title: "Lab 3"
+author: "Sue Yang, Michelle Kim, Legg Yeung"
+date: "August 6, 2017"
+output:
+  pdf_document: default
+  word_document: default
+html_document:
+  number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Question 1
+
+**During your EDA, you notice that your data exhibits both seasonality (different months have different heights) AND that there is a clear linear trend. How many order of non-seasonal and seasonal differencing would it take to make this time-series stationary in the mean? Why?**
+
+To remove linear trend it is necessary to difference once with lag 1. Because in a purely linear trend, differencing by the last observation singles out the roughly equivalent increments which are stationary at the mean. To remove seasonal patterns, it is necessary to difference once with lag 12 for annual patterns, or lag 4 for quarterly patterns. Because in a purely seasonal series where each observation is same as the one from the last season, differencing by the observation from last season removes seasonal fluctuations and stablize the series at the mean. Real world economic time series, like ours, often exhibit both linear trend in additional to annual seasonal behavior. Therefore differencing by lag 1 and lag 12 will help stablize the raw series at the mean. In the following we simulate a raw series that is a random walk with drift (linear trend) and strong dependence on its seasonal lag 1, then demonstrate how first and seasonal differencing can stablize it at the mean. The model is :
+
+$$(1-B)(1 - B^{12})X_t = 0.5 + W_t$$
+
+$$X_t = 0.5 + X_{t-12} - X_{t-13} + X_{t-1} + w_t$$
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+set.seed(30)
+x<-w<-rnorm(200)
+
+#x_t = 0.5 + x_{t-12}-*x_{t-13}+x_{i-1}+w_t
+for(i in 14:200) x[i]<- 0.5 + x[i-12]- x[i-13]+x[i-1]+w[i]
+
+
+#difference only once
+y1<-diff(x)
+
+#difference only seasonally
+y12<-diff(x,12)
+
+#difference lag 1 and seasonally
+y<-diff(diff(x),12)
+
+# Kernel smoothing
+x.k.smooth.widest = ksmooth(time(x), 
+                             x, kernel = c("normal"), 
+                             bandwidth = 25)
+y1.k.smooth.widest = ksmooth(time(y1), 
+                             y1, kernel = c("normal"), 
+                             bandwidth = 25)
+y12.k.smooth.widest = ksmooth(time(y12), 
+                             y12, kernel = c("normal"), 
+                             bandwidth = 25)
+y.k.smooth.widest = ksmooth(time(y), 
+                             y, kernel = c("normal"), 
+                             bandwidth = 25)
+
+# Make plots
+
+plot(x, type="l", col = "darkgray")
+title("Raw Series")
+lines(x.k.smooth.widest$x, x.k.smooth.widest$y, col = "magenta")
+abline(lm(x~time(x)), lty = "dotdash", col = "black", lwd = 2)
+legend("topleft", legend = c("lm", "smoothed", "original"),
+       lty = c("dotdash","solid", "solid"), 
+       col = c("black", "magenta", "darkgrey"))
+
+plot(y1, type="l", col = "darkgray")
+title("First Differenced Series")
+lines(y1.k.smooth.widest$x, y1.k.smooth.widest$y, col = "magenta")
+abline(lm(y1~time(y1)), lty = "dotdash", col = "black", lwd =2)
+legend("topleft", legend = c("lm", "smoothed", "original"),
+       lty = c("dotdash","solid", "solid"), 
+       col = c("black", "magenta", "darkgrey"))
+
+plot(y12, type="l", col = "darkgray")
+title("Seasonal Differenced Series")
+lines(y12.k.smooth.widest$x, y12.k.smooth.widest$y, col = "magenta")
+abline(lm(y12~time(y12)), lty = "dotdash", col = "black", lwd = 2)
+legend("topleft", 
+       legend = c("lm", "smoothed", "original"),
+       lty = c("dotdash","solid", "solid"), 
+       col = c("black", "magenta", "darkgrey"))
+
+plot(y, col = "darkgray", type = "l")
+title("First and Seasonal Differenced Series")
+lines(y.k.smooth.widest$x, y.k.smooth.widest$y, col = "magenta")
+abline(lm(y~time(y)), lty = "dotdash", col = "black", lwd =2)
+legend("bottom", legend = c("lm", "smoothed", "original"),
+       lty = c("dotdash","solid", "solid"), 
+       col = c("black", "magenta", "darkgrey"),
+       horiz = TRUE)
+```
+
+```{r}
+y = list()
+for (j in 1:10){
+  set.seed(j)
+  x<-w<-rnorm(200)
+  for(i in 14:200) x[i]<- 0.5 + x[i-12]- x[i-13]+x[i-1]+w[i]
+  y[[j]]<-diff(diff(x),12)
+}
+
+#par(mfrow = c(2,2))
+
+plot(y[[1]], col = rgb(0,0,0, alpha = 0), ylab = "differenced values",
+     main = "10 Simulated 1st & 12th Differenced Series")
+axis(side = 2, at = seq(-2,3,0.5))
+for (j in 1:10){
+lines(y[[j]], col = j, type = "l", lwd = 1, lty = "dotted")
+abline(lm(y[[j]]~time(y[[1]])), 
+       col = j*3, lwd = 2)  
+}
+legend("topright",legend = "Theoretical Mean = 0.5", bty = "n")
+```
+
+
+#Question 2: SARIMA
+
+It is Dec 31, 2016 and you work for a non-partisan think tank focusing on the state of the US economy. You are interested in forecasting the unemployment rate through 2017 (and then 2020) to use it as a benchmark against the incoming administrations economic performance. Use the dataset UNRATENSA.csv and answer the following:
+
+(A) Build a SARIMA model using the unemployment data and produce a 1 year forecast and then a 4 year forecast. Because it is Dec 31, 2016, leave out 2016 as your test data.
+
+```{r}
+rm(list = ls())
+library(moments)
+library(psych)
+library(forecast)
+library(tseries)
+library(effects)
+library(knitr)
+library(sandwich)
+library(stargazer)
+library(vars)
+opts_chunk$set(tidy.opts=list(width.cutoff=55),tidy=TRUE)
+
+unem.data = read.csv("UNRATENSA.csv", header = T)
+auto.data = read.csv("TOTALNSA.csv", header = T)
+
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1))
+auto.ts = ts(auto.data$TOTALNSA, frequency = 12, start = c(1976,1))
+```
+
+# Exploratory Data Analysis
+
+## Data Overview 
+
+In order to choose the best form for our models, we will first conduct a thorough EDA of the available datasets. We begin by examining the structure of the data.
+
+```{r}
+str(unem.data)
+str(auto.data)
+```
+
+We note that the unemployment rate data begins in January 1948, whereas the auto sales data begins in January 1976.
+
+```{r}
+cbind(head(unem.data),tail(unem.data))
+```
+
+```{r}
+cbind(head(auto.data),tail(auto.data))
+```
+
+Both datasets end in June 2017.
+
+```{r}
+nrow(unem.data) - nrow(auto.data)
+```
+
+Both datasets are time indexed, accompanied with a key variable of interests. With UNRATENSA, the key variable refers to unemployment rate. With TOTALNSA, the key variable refers to car sale. Both time series present monthly data. UNRATENSA has 28 more years of data, which is 336 more observations than TOTALNSA.
+
+## Time Series Overview
+
+### Time Plots and Histograms
+
+Next we will examine a plot of the time series of the Unemployment Rate data.
+
+```{r}
+ts.plot(unem.ts,
+        ylab="Unemployment Rate"); title("Unemployment Rate Jan 1948 to Jun 2017"); 
+abline(h = mean(unem.ts), col = "red", lty = "dotdash", lwd = 2)
+abline(h = c((mean(unem.ts) + sd(unem.ts)),
+             (mean(unem.ts) + 2*sd(unem.ts)),
+             (mean(unem.ts) + 3*sd(unem.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(h = c((mean(unem.ts) - sd(unem.ts)),
+             (mean(unem.ts) - 2*sd(unem.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+#abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "blue")
+legend("topleft", c("Standard Deviations","Mean"), 
+       col = c("red","red"), 
+       lty = c("dotted", "dotdash"), bty = "n",
+       lwd = c(1,2))
+```
+
+From the above time plot of unemployment, we see clear persistency of the observations. That is, when observations are above or below the mean, they tend to stay so for a while. The overall trend seem to climb slowly upward.
+
+```{r}
+hist(unem.data$UNRATENSA, main = "Distribution of Unemployment Rate",
+     xlab = "Unemployment Rate")
+
+abline(v = mean(unem.data$UNRATENSA), col = "red", lty = "dotdash"
+       , lwd = 2)
+abline(v = c((mean(unem.data$UNRATENSA) + sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) + 2*sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) + 3*sd(unem.data$UNRATENSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(v = c((mean(unem.data$UNRATENSA) - sd(unem.data$UNRATENSA)),
+             (mean(unem.data$UNRATENSA) - 2*sd(unem.data$UNRATENSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+abline(v = median(unem.data$UNRATENSA), col = "green", lty = "dotdash"
+       , lwd = 2)
+
+legend("topright", c("Mean","Standard Deviations", "Median"), 
+       col = c("red","red","green"), 
+       lty = c("dotdash", "dotted","dotdash"))
+```
+
+Almost 5% of the observations lie 2 standard deviations above the mean, which is made obvious in the right skewed histogram as well. Next we will examine the more extreme values (more than 2.5 standard deviations from the mean.)
+
+```{r}
+unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) + 2.5*sd(unem.data$UNRATENSA),]
+```
+
+```{r}
+# percentage of observations beyond 2, 2.5 and 3 sd
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) 
+               + 2*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA) 
+               + 2.5*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+nrow(unem.data[unem.data$UNRATENSA > mean(unem.data$UNRATENSA)
+               + 3*sd(unem.data$UNRATENSA),])/nrow(unem.data)
+```
+
+Isolating these observations, the 6 in 1982 and 1983 probably correspond to the early 1980s recessions which officially ended in November 1982. The 3 in 2010 likely correspond to the late 2000s recession which officially ended in June 2009.
+
+Next we will examine a plot of the time series of the Auto Sales data.
+
+```{r}
+ts.plot(auto.ts, ylab="Auto Sales"); title("Auto Sales Jan 1976 to Jun 2017")
+abline(h = mean(auto.ts), col = "red", lty = "dotdash", lwd = 2)
+abline(h = c((mean(auto.ts) + sd(auto.ts)),
+             (mean(auto.ts) + 2*sd(auto.ts)),
+             (mean(auto.ts) + 3*sd(auto.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(h = c((mean(auto.ts) - sd(auto.ts)),
+             (mean(auto.ts) - 2*sd(auto.ts))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+#abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "blue")
+legend("topleft", c("Standard Deviations","Mean"), 
+       col = c("red","red"), 
+       lty = c("dotted", "dotdash"), bty = "n",
+       lwd = c(1,2))
+```
+
+From the above time plot of auto sales, we see some persistency, but it appears weaker than in the unemployment series. The overall trend doesn't seem to climb upward or downward. There are more noticeable seasonal patterns than in the unemployment series. 
+
+```{r}
+hist(auto.data$TOTALNSA, main = "Histogram of Auto Sales",
+     xlab = "Auto Sales (1000s)")
+
+abline(v = mean(auto.data$TOTALNSA), col = "red", lty = "dotdash"
+       , lwd = 2)
+abline(v = c((mean(auto.data$TOTALNSA) + sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) + 2*sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) + 3*sd(auto.data$TOTALNSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+abline(v = c((mean(auto.data$TOTALNSA) - sd(auto.data$TOTALNSA)),
+             (mean(auto.data$TOTALNSA) - 2*sd(auto.data$TOTALNSA))), 
+       col = "red", lty = "dotted", lwd = 1)
+
+abline(v = median(auto.data$TOTALNSA), col = "green", lty = "dotdash"
+       , lwd = 2)
+
+legend("topright", c("Mean","Standard Deviations", "Median"), 
+       col = c("red","red","green"), 
+       lty = c("dotdash", "dotted","dotdash"))
+```
+
+The histogram is more symmetric and normal. Less than 1.5% of the observations lie more than 2 standard deviations above the mean and less than 2.5% of the  observations lie more than 2 standard deviations below the mean. We will isolate and further examine these more extreme observations.
+
+```{r}
+auto.data[auto.data$TOTALNSA < mean(auto.data$TOTALNSA) - 2*sd(auto.data$TOTALNSA),]
+```
+
+```{r}
+head(auto.data[auto.data$TOTALNSA > mean(auto.data$TOTALNSA) + 2*sd(auto.data$TOTALNSA),],1)
+```
+
+```{r}
+# percentage of observations beyond 2 sd
+nrow(auto.data[auto.data$TOTALNSA > mean(auto.data$TOTALNSA) 
+               + 2*sd(auto.data$TOTALNSA),])/nrow(auto.data)
+
+nrow(auto.data[auto.data$TOTALNSA < mean(auto.data$TOTALNSA) 
+               - 2*sd(auto.data$TOTALNSA),])/nrow(auto.data)
+
+```
+
+After isolating these observations we note the 5 in 1982 and 1983 and the 5 in 2008 and 2009 probably correspond to the two aforementioned recessions. Notice that these recession-related observations in auto sales tend to happen a few months before those in unemployment. There is an unusual spike in 1986, possibly attributed to oil prices dropping in half that year.
+
+```{r}
+summary(unem.data$UNRATENSA)
+summary(auto.data$TOTALNSA)
+```
+
+Examining the summary statistics of each series, we note that the Unemployment Rate falls between 2.4% and 11.4%, with a mean of 5.8%. The Auto Sales ranges from 670,400 cars to 1.8 million cars, with a mean of 1.2 million. 
+
+### Trend Examination with Smoothers and Decomposition - Unemployment Rate
+
+In this section, we apply smoothers and decomposition to gain some initial insights about the overall trend, seasonality and noise behavior of the unemployment rate series.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# Moving Average Filter
+unem.ma.smooth.4year = filter(unem.ts, sides = 1, rep(1/48, 48))
+unem.ma.smooth.annual = filter(unem.ts, sides = 1, rep(1/12, 12))
+unem.ma.smooth.halfyear = filter(unem.ts, sides = 1, rep(1/6, 6))
+
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Moving Average Filtered")
+lines(unem.ma.smooth.4year, col = "magenta")
+lines(unem.ma.smooth.annual, col = "red")
+lines(unem.ma.smooth.halfyear, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+legend("topleft",
+       legend = c("lm", "4year", "annual","halfyear"),
+       lty = c("solid","solid", "solid", "solid"), 
+       col = c("black","magenta", "red", "blue"),
+       pt.cex=1, cex=0.7)
+
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+unem.k.smooth.wide = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.ts), 
+                               unem.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, col = "magenta")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+legend("topleft",
+       legend = c("lm", "bw10", "bw4","bw0.5"),
+       lty = c("solid","solid", "solid", "solid"), 
+       col = c("black","magenta", "red", "blue"),
+       pt.cex=1, cex=0.7)
+```
+
+The asymmetric moving average filters a moving average over the past 6 months, 12 months and 4 years. The symmetric kernel smoothers attempted three different bandwidths (10, 4, and 0.5). In either case, the smoothed series resemble behavior of random walks with drift, evidenced by the gradually widening variance and slowly increasing mean towards the right. Formulation for the two smoothers are given here:
+
+  - One-sided Moving Average Smoother
+
+$$m_t = \frac{1}{n+1} \sum_{j = 0}^{n}x_{t-j}$$
+
+where $m_t$ refers to the trend we hope to study, $x_t$ is the raw series, $n$ is the number of past months to include in the averaging.
+
+  - Symmertic Kernel Smoother (symmetric moving average smoother with probability density weight function applied)
+
+$$m_t = \sum_{i=1}^{n}w_i(t)x_{t_i}$$
+
+where density weight function $w_i(t)$ is a function of the kernel function and  $w_i(t) = K(\frac{t-t_i}{b}) / \sum_{j=1}^{n} K(\frac{t-t_j}{b})$. $b$ is the bandwidth which we manipulate. The blue kernel curve used $b=0.5$ to correspond approximately smoothing over about half a year. The smoother curves were generated using higher bandwidth.
+
+```{r}
+plot(decompose(unem.ts, type = "additive"))
+```
+
+The decomposed trend series resembles that of the moving average and kernel filters. Here the growing variance of the trend is more noticeable, as well as the gradual upward trend. A regular, annual seasonality series was isolated out from the raw series. The random component series is clearly non-stationary. Its variance diminishes over time, with dramatic spikes before 1965. Clearly, an OLS model would not be the right choice, and we should not disregard the non-stationary trend and random components.
+
+These techniques assume that the raw series is composed of a clear trend, seasonality and random component. The model imposed is:
+
+$$X_t = M_t + S_t + N_t$$
+
+where $X_t$ is the raw series, $M_t$ is the trend, $S_t$ is the seasonal component and $N_t$ is the random component.
+
+### Trend Examination with Smoothers and Decomposition - Auto Sales
+
+Next we will conduct a similar analysis for the auto sales data.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# Moving Average Filter
+auto.ma.smooth.4year = filter(auto.ts, sides = 1, rep(1/60, 60))
+auto.ma.smooth.annual = filter(auto.ts, sides = 1, rep(1/12, 12))
+auto.ma.smooth.halfyear = filter(auto.ts, sides = 1, rep(1/6, 6))
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales (1000s)",
+     main = "Auto Sales - Moving Average Filtered")
+lines(auto.ma.smooth.4year, col = "magenta")
+lines(auto.ma.smooth.annual, col = "red")
+lines(auto.ma.smooth.halfyear, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+legend("topleft",
+       legend = c("lm", "4year", "annual","halfyear"),
+       lty = c("solid","solid", "solid", "solid"), 
+       col = c("black","magenta", "red", "blue"),
+       pt.cex=1, cex=0.6)
+
+
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales (1000s)",
+     main = "Auto Sales - Kernel Smoothed")
+lines(auto.k.smooth.widest$x, auto.k.smooth.widest$y, col = "magenta")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+legend("topleft", 
+       legend = c("lm","bw10","bw4","bw0.5"),
+       lty = c("solid","solid", "solid", "solid"), 
+       col = c("black","magenta", "red", "blue"),
+        pt.cex=1, cex=0.6)
+```
+
+Compared to the unemployment series, the auto sales series exhibits less downhill-uphill-downhill behavior, and appears to be relatively stable between the two aforementioned recessions in early 1980s and late 2000s. It resembles less of a random walk and drift is not entirely apparent. The seasonal pattern is also stronger.
+
+```{r}
+plot(decompose(auto.ts, type = "additive"))
+```
+
+The trend component observed in the decomposed series concurs with our intuitions from the smoothed series. With the seasonal component taken out, the random component shows a spike in mid-1980s and several more in 2000s, both of which may correspond to respective oil price fluctuations. In general, the random component series shows higher variance before mid-1980s than after, which we have also observed in the unemployment series. The decomposed components are clearly not stationary, which again suggest that OLS is not appropriate. 
+
+
+## Establish Stationarity
+
+### Seasonality and Unit Root Investigation - Unemployment Rate
+
+```{r}
+monthplot(unem.ts);title("Monthly Plot Unemployment Rate")
+```
+
+The monthly plot shows some seasonal pattern at the mean, but the range of unemployment variation for each month also overlaps a lot with other months. So the seasonal pattern exists but is not very strong. We see that the unemployment rate tends to be a little higher in the beginning and middle of each year followed by mild gradual decrease.
+
+```{r}
+astsa::lag1.plot(unem.ts,16) 
+```
+
+The above scatterplot shows that the series is most correlated with its first lag, then correlations grow weaker and the point clouds becomes more scattered with larger lags, without any sign of picking up at lag 12. This plot itself doesn't suggest seasonal effects.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(unem.ts, lag.max = 61, main = ""); title("ACF Unemployment Rate")
+pacf(unem.ts, lag.max = 61, main = ""); title("PACF Unemployment Rate")
+```
+
+The ACF plot shows slow decay from lag 0 coupled with a sharp drop on the PACF after lag 1. This is a sign of an AR(1) process. We see minor local maxima on the acf at lag 12, 24, 36 and 48 which indicate seasonal effects. The significant, negative spikes on the PACF plot which tail off at lag 13, 25, 37, and 49 suggest seasonal AR or MA components. Some smaller significant pacf values within the first 12 lags suggest either some AR processes or an MA process in that range.
+
+To help us further in establishing stationarity, we compare the seasonally differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
+
+```{r}
+unem.ts.diff12 = diff(unem.ts, lag = 12)
+unem.ts.diff = diff(unem.ts, lag = 1)
+unem.ts.diff.diff12 = diff(unem.ts.diff, lag = 12)
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+ts.plot(unem.ts.diff12)
+abline(lm(unem.ts.diff12 ~ time(unem.ts.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(unem.ts.diff12), lwd = 0.5)
+abline(h = c(mean(unem.ts.diff12), mean(unem.ts.diff12) + 
+               2 * sd(unem.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(unem.ts.diff12), mean(unem.ts.diff12) - 
+               2 * sd(unem.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("Seasonally Differenced - Unemployment Rate")
+
+ts.plot(unem.ts.diff)
+abline(lm(unem.ts.diff ~ time(unem.ts.diff)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(unem.ts.diff), lwd = 0.5)
+abline(h = c(mean(unem.ts.diff), mean(unem.ts.diff) + 
+               2 * sd(unem.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(unem.ts.diff), mean(unem.ts.diff) - 
+               2 * sd(unem.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First Differenced - Unemployment Rate")
+
+```
+
+The seasonally differenced series retained most of the random walk like behavior in the raw series and appear more persistent before mid 1980s. The first differenced series eliminated most random walk and persistent behaviors but variance is generally larger before 1980. There is still a slight downward trend (green regression line) with the seasonally differenced series. (The red line refers to 2 standard deviations.)
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(unem.ts.diff12, lag.max = 61, main = "")
+title("ACF Seasonally Diffenced Unemployment Rate")
+pacf(unem.ts.diff12, lag.max = 61, main = "")
+title("PACF Seasonally Diffenced Unemployment Rate")
+```
+
+In the seasonally differenced series, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lags 13, 25, and 37 as well. This suggests an AR(1) process in combination with seasonal AR(3), or in combination with some seasonal ARMA processes. Notice a couple significant pacfs between lag 2 to 4; they can be AR(2-4) components but it is hard to tell at this stage. We may entertain the model SARIMA(4,0,q)(3,1,Q) from these plots.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(unem.ts.diff, lag.max = 61, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 61, main = "")
+title("PACF First Diffenced Unemployment Rate")
+
+#Additional Lags
+acf(unem.ts.diff, lag.max = 720, main = "")
+title("ACF First Diffenced Unemployment Rate")
+pacf(unem.ts.diff, lag.max = 720, main = "")
+title("PACF First Diffenced Unemployment Rate")
+```
+
+In the first differenced series, the plots show periodic behavior. The extended plot with additional lags shows that the acf tails off until lag 720, which suggest either a seasonal long memory or seasonal integrated process (both SAR(1)) in combination with some sesonal AR(2-4) components or in combination with a seasonal MA component. The pacf shows some significance between lag 2-9 without a little echo in the acf lag 13-16, which can come from some MA processes, but it's hard to say at this stage. We will assume there are some ARMA processes present. We may entertain the model as a SARIMA(9,1,q)(4,0,Q) using these plots.
+
+```{r}
+ts.plot(unem.ts.diff.diff12)
+abline(lm(unem.ts.diff.diff12 ~ time(unem.ts.diff.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(unem.ts.diff.diff12), lwd = 0.5)
+abline(h = c(mean(unem.ts.diff.diff12), mean(unem.ts.diff.diff12) + 
+               c(-3,-2,2,3) * sd(unem.ts.diff.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First and Seasonally Differenced - Unemployment")
+```
+
+The first and seasonally differenced series seem more volatile before mid 1960s. Nevertheless, the fluctuation intervals and magnitude of spikes are similar across the whote time series. This series appear stationary at the mean and most observations stay within 2 deviations. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(unem.ts.diff.diff12, lag.max = 61, main = "")
+title("ACF First and Seasonally Diff. Unemployment Rate")
+pacf(unem.ts.diff.diff12, lag.max = 61, main = "")
+title("PACF First and Seasonally Diff. Unemployment Rate")
+```
+
+In the first and seasonally differenced series, the autocorrelation plots don't show an AR(1) component anymore. We still see a significant acf at lag 12 and significant decaying pacf at lag 12, 24, 36 and 48, which suggests a seasonal MA(1) process. At lag 2-4, the pacf are still significant with some echos in acf which suggests some AR(4) components. We will assume some ARMA processes present. We may entertain the model as a SARIMA(4,1,0)(0,1,1) using these plots.
+
+Performing both differencing procedures may over-difference the series. To determine how much is enough, we perform unit root tests below to check for stationarity. Augmented Dicky Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
+
+  - Ho : The series has a unit root
+  - Ha : The series is stationary
+  
+In the ADF test, our null hypothesis assume that the process is a random walk with drift and some AR(p) components,$x_t = \beta_0 + \phi x_{t-1} + \sum_{j=1}^{p-1}\psi_j x_{t-j}  + w_t$, where $\beta_0$ represents the drift and $\phi = 1$. We are essentially testing the null hypothesis $\gamma = 0$ in the differenced series $\nabla x_t = \gamma x_{t-1} +  \sum_{j=1}^{p-1}\psi_j \nabla x_{t-j}  + w_t$ since $\gamma = \phi - 1$. Under the alternative hypothesis $\gamma < 0$. On the other hand, the Philips Perron test, our null hypothesis assume a model $x_t = \beta_0 + \rho_1 x_{t-1} + u_t$, where non-parametric correction is applied on $\rho$ to correct for serial correlation in $u_t$ already. We are essential testing of $\rho = 1$ in the null hypothesis.
+
+```{r}
+tseries::adf.test(unem.ts)
+tseries::pp.test(unem.ts)
+tseries::adf.test(unem.ts.diff)
+tseries::pp.test(unem.ts.diff)
+tseries::adf.test(unem.ts.diff12)
+tseries::pp.test(unem.ts.diff12)
+tseries::adf.test(unem.ts.diff.diff12)
+tseries::pp.test(unem.ts.diff.diff12)
+```
+
+As expected with the raw series, the ADF test failed to reject the null hypothesis that the series contains a unit root. The PP test results contradicts, but we acknowledge that the test mechanism is different and that some early literature (Davidson and Mackinnon 2004) showed that ADF performs better in finite sample than PP test. All the tests rejected the null hypotheses that either the first differenced or seasonally differenced or first and seasonally differenced series contains a unit root and supports stationarity. The unit root tests by themselves don't suggest both first and seasonal differencing.
+
+
+### Unemployment Series Stationarity Conclusion
+
+Although some plots show more volatile behavior of the series before mid-1960s, we decide not to truncate the series because the random walk behavior, seasonal pattern, spike magnitude, and slight upward trend seem consistent through the entire series. We believe the generating process underlying unemployment rate is similar enough from 1948 to 2017 that keeping all observations will provide more precise estimates. Referring to the correlation plots below, the acf and pacf plots of the series before and after mid-1960s are fairly similar. Both split series exhibit strong AR(1) behavior and some seasonal patterns. (Note that the shorter decay in the split series before 1964 can be attributed to a substantially smaller sample size.)
+
+Regarding first differencing, all of our plots and tests suggests strong random walk behavior with the raw series, so it is recommended. Regarding additional seasonal differencing, the results were inconclusive. The monthly, acf and pacf plots suggest noticeable seasonal pattern, while the scatterplot matrix doesn't. The unit root test suggested that either first or seasonal differencing can help us to establish a stationary series. At this stage, we remain open to a first differenced, or first differenced in additional to seasonally differenced model. We defer to the modeling and forecasting results to determine the best candidate.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+unem.ts.til1964 = window(x = unem.ts, end = c(1964,12))
+unem.ts.from1964 = window(x = unem.ts, start = c(1965,1))
+
+acf(unem.ts.til1964, main = "", lag.max = 36)
+title("Before 1964 Dec")
+pacf(unem.ts.til1964, main = "", lag.max = 36)
+title("Before 1964 Dec")
+acf(unem.ts.from1964, main = "", lag.max = 36)
+title("After 1964 Dec")
+pacf(unem.ts.from1964, main ="", lag.max = 36)
+title("After 1964 Dec")
+```
+
+
+### Seasonality and Unit Root Investigation -- Auto Sales
+
+Next we will conduct a similar analysis of the auto sales dataset.
+
+```{r}
+monthplot(auto.ts);title("Monthly Plot Auto Sales")
+```
+
+Compared to that of unemployment rate, the monthly plot of auto sales shows much more discrete values in the mean for each month. The seasonal pattern is much stronger. We see that auto sales tend to be noticeably lower in the first two months, pick up sharply in March, then step up and down for the rest of the year. Fall sales are generally lower than summer sales.
+
+```{r}
+astsa::lag1.plot(auto.ts,16)
+```
+
+The scatterplot matrix of auto sales with its own lags displays clear seasonal dependence. Autocorrelation is highest with lag 12, which is the same month last year, even more than when compared to the previous month. The opposite patterns were observed in the unemployment rates series, when autocorrelation was highest with lag 1 and then gradually declines for higher lags.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(auto.ts, lag.max = 61, main = ""); title("ACF Auto Sales")
+pacf(auto.ts, lag.max = 61, main = ""); title("PACF Auto Sales")
+```
+
+Similar to the unemployment series, the acf shows slow decay from lag 0, a sharp drop of pacf after lag 1 and some local acf maximums at lag 12, 24, 36 and 48. Unlike the unemployment series, the acf decay ends earlier at lag 36. The local maxima have much stronger profiles. Some significant pacf values occur before lag 12 which suggest either some AR or MA components (effects on acf plot are not discernable) in that range.
+
+Based on a strong seasonal pattern in the above three plots, seasonal differencing would be useful in achieving stationarity. To help us determine, we again compare the seasonally differenced and first differenced series and compare their behaviors using time and autocorrelation plots.
+
+```{r}
+auto.ts.diff12 = diff(auto.ts, lag = 12)
+auto.ts.diff = diff(auto.ts, lag = 1)
+auto.ts.diff.diff12 = diff(auto.ts.diff, lag = 12)
+```
+
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+ts.plot(auto.ts.diff12)
+abline(lm(auto.ts.diff12 ~ time(auto.ts.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff12), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) + 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff12), mean(auto.ts.diff12) - 
+               2 * sd(auto.ts.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("Seasonally Differenced - Auto Sales")
+
+ts.plot(auto.ts.diff)
+abline(lm(auto.ts.diff ~ time(auto.ts.diff)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) + 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff), mean(auto.ts.diff) - 
+               2 * sd(auto.ts.diff)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First Differenced - Auto Sales")
+```
+
+The seasonally differenced series noticeably removed the strong seasonal patterns and some degree of persistency from the raw series, but the random walk behavior of raw series before early 1990s and after mid 2000s is retained. The first differenced series removed most persistencies from the raw series but appear clustered regularly at seasonally intervals. Both series removed the upward trend in the raw series effectively.
+
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(auto.ts.diff12, lag.max = 61, main = "")
+title("ACF for Seasonally Differenced Auto Sales")
+pacf(auto.ts.diff12, lag.max = 61, main = "")
+title("PACF for Seasonally Differenced Auto Sales")
+```
+
+Similar to unmployment rate, in the seasonally differenced series of auto sales, we still see a significant pacf at lag 1 followed by a sharp drop and gradual decay in the acf. Notice the significant pacfs in lag 12, 24 and 36. This suggests an AR(1) process in combination with seasonal AR(3) or some seasonal MA component. Also notice a few significant pacfs at lags 2-4. We may entertain the model as a SARIMA(4,0,q)(3,1,Q) using these plots. It doesn't seem like an additional first differencing is necessary.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(auto.ts.diff, lag.max = 61, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 61, main = "")
+title("PACF First Difference Auto Sales")
+
+#Additional Lags 
+acf(auto.ts.diff, lag.max = 720, main = "")
+title("ACF First Difference Auto Sales")
+pacf(auto.ts.diff, lag.max = 720, main = "")
+title("PACF First Difference Auto Sales")
+```
+
+Similar to unmployment rate, in the first differenced series of auto sales, the acf tails off very slowly until lag 360. Unlike that of the unemployment series, the seasonal ripples on the acf appear much stronger. This plots suggest a strong seasonal AR(1) component and some AR(p) components before lag 12.
+
+```{r}
+ts.plot(auto.ts.diff.diff12)
+abline(lm(auto.ts.diff.diff12 ~ time(auto.ts.diff.diff12)), 
+       col = "green", lty = "dotdash", lwd = 2)
+abline(h = mean(auto.ts.diff.diff12), lwd = 0.5)
+abline(h = c(mean(auto.ts.diff.diff12), mean(auto.ts.diff.diff12) + 
+               2 * sd(auto.ts.diff.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+abline(h = c(mean(auto.ts.diff.diff12), mean(auto.ts.diff.diff12) - 
+               2 * sd(auto.ts.diff.diff12)), col = "red", 
+       lwd = 1, lty = "dotted")
+title("First and Seasonally Differenced - Auto Sales")
+```
+
+Despite several spikes, the first and seasonally differenced series seems roughly stationary at the mean and variance. Most observations stay within two standard deviations.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(auto.ts.diff.diff12, lag.max = 61, main = "")
+title("ACF First and Seasonal Difference Auto Sales")
+pacf(auto.ts.diff.diff12, lag.max = 61, main = "")
+title("PACF First and Seasonal Difference Auto Sales")
+```
+
+In the first and seasonally differenced series, the autocorrelation plots don't show an AR(1) component anymore, we still see significant acf and pacf around lag 12, 24, 36, which indicate some seasonal ARMA components. We also see a significant acf at lag 1 echoed by some significant pacf which indicate an MA(1) component. We may entertain the model as a SARIMA(1,1,0)(P,1,Q) using these plots. Notice that the occurence of both MA and SMA components could come from over-differencing the raw series. But if our goal is to produce better forecasts rather than estimating a random component detrended from the raw series, first in additional to seasonal differencing is still acceptable.
+
+We perform unit root tests below to check for stationarities of the raw, first differenced and seasonally differenced series for auto sales. Augmented Dickey Fuller Test and Phillips Perron Tests are performed, with the following test hypotheses:
+
+  - Ho : The series has a unit root
+  - Ha : The series is stationary
+
+```{r}
+tseries::adf.test(auto.ts)
+tseries::pp.test(auto.ts)
+tseries::adf.test(auto.ts.diff)
+tseries::pp.test(auto.ts.diff)
+tseries::adf.test(auto.ts.diff12)
+tseries::pp.test(auto.ts.diff12)
+tseries::adf.test(auto.ts.diff.diff12)
+tseries::pp.test(auto.ts.diff.diff12)
+```
+
+All tests rejected the null hypotheses for all four series. Notice that the ADF test p-value for the raw series is closer to the critical cut off of 0.05. There can be a very weak chance that the raw series contains a unit root. 
+
+### Auto sales series stationarity conclusion: 
+
+Regarding seasonal differencing, all of our plots suggests strong seasonal patterns in the raw series, so it is recommended. Regarding first differencing, our raw series and seasonally differenced series both show noticeable AR(1) behavior and the unit test only weakly reject the null hypothesis of stationarity. At this stage, we remain open to a seasonal difference, or first difference in addition to a seasonally differenced model. Again, we defer to the modeling and forecasting results to determine the best candidate.
+
+## Examine Bivariate Relationship
+
+Next we examine bivariate relationships between the unemployment rate and auto sales data.
+
+### Overview and cross-correlation
+
+```{r}
+# Intersect the series
+combined.raw = ts.intersect(unem.ts, auto.ts)
+unem.intersect.ts = combined.raw[,1]
+auto.intersect.ts = combined.raw[,2]
+
+head(combined.raw);tail(combined.raw)
+```
+
+```{r}
+par(mfrow = c(2,1))
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+unem.k.smooth.wide = ksmooth(time(unem.intersect.ts), 
+                             unem.intersect.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+unem.k.smooth.narrow = ksmooth(time(unem.intersect.ts), 
+                               unem.intersect.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(unem.intersect.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, col = "red")
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, col = "blue")
+abline(lm(unem.intersect.ts~time(unem.intersect.ts)), lty = "dotted", col = "black")
+
+# Kernel smoothing
+auto.k.smooth.widest = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 10)
+
+auto.k.smooth.wide = ksmooth(time(auto.ts), 
+                             auto.ts, kernel = c("normal"), 
+                             bandwidth = 4)
+
+auto.k.smooth.narrow = ksmooth(time(auto.ts), 
+                               auto.ts, kernel = c("normal"), 
+                               bandwidth = 0.5)
+
+# Make plot
+plot(auto.ts, col = "gray", ylab = "Auto Sales (1000s)",
+     main = "Auto Sales - Kernel Smoothed")
+lines(auto.k.smooth.wide$x, auto.k.smooth.wide$y, col = "red")
+lines(auto.k.smooth.narrow$x, auto.k.smooth.narrow$y, col = "blue")
+abline(lm(auto.ts~time(auto.ts)), lty = "dotted", col = "black")
+```
+
+```{r}
+norm.unem<-(unem.intersect.ts-mean(unem.intersect.ts))/sd(unem.intersect.ts)
+norm.auto<-(auto.intersect.ts-mean(auto.intersect.ts))/sd(auto.intersect.ts)
+
+plot(norm.unem, col = "blue", ylab = "Std. Unemployment and Auto Sales",
+     main = "Standardized Unemployment and Auto Sales",ylim=c(-3,5))
+lines(norm.auto, col = "red")
+legend("topleft",col=c("blue","red"),legend=c("Unemployment","Auto Sales"),
+       lty=c(1,1))
+```
+
+
+It appears that between 1976 to early 1990s and between late 2000s and 2017, a crest in auto sales would be echoed with a trough in unemployment rate a few months later and a trough in auto sales would be echoed by a crest in unemployment rate a few months later. The unemployment series has a slight downward trend over the whole time interval while the opposite is true for auto sales.
+
+```{r}
+# Function for scatterplot with Loess Curve and regression curve
+scatter.loess.lm.plot = function(y, x, xlab, ylab, title){
+  
+  plot(x = x, y = y, xlab = xlab, ylab = ylab)
+  title(title)
+  
+  abline(lm(y~x), col = "green", lty = "dotted")
+  
+  order.pred = order(x)
+  smooth.stand = loess(formula = y~x, 
+                       weights = rep(1,length(x)))
+  lines(x = x[order.pred],
+        y = predict(smooth.stand)[order.pred],
+        lty = "solid", col = "red")
+  
+  legend("topright", 
+         legend = c("regression line", "Loess curve"),
+         col = c("green", "red"), 
+         lty = "dotted", "solid", bty = "n")
+}
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+
+scatter.loess.lm.plot(y = unem.intersect.ts,
+                      x = auto.intersect.ts,
+                      xlab = "Auto Sales",
+                      ylab = "Unemployment",
+                      title = "Unemployment vs Auto Sales")
+
+scatter.loess.lm.plot(y = as.vector(aggregate(unem.intersect.ts)),
+                      x = as.vector(aggregate(auto.intersect.ts)),
+                      xlab = "Annual Auto Sales",
+                      ylab = "Annual Unemployment",
+                      title = "Annual Unemployment vs Annual Auto Sales")
+```
+
+```{r}
+corr.unemp.auto<-cor(auto.intersect.ts,unem.intersect.ts)
+corr.unemp.auto.ann<-cor(aggregate(auto.intersect.ts),aggregate(unem.intersect.ts))
+```
+
+Corr(Unemployment, Auto Sales): `r round(corr.unemp.auto,3)`
+
+Corr(Annual Unemployment, Annual Auto Sales): `r round(corr.unemp.auto.ann,3)`
+
+Disregarding time-dependent variations, the two series show some non-linear relationship in addition to overall negative correlation. The annually aggregated series show stronger and more linear correlation. It seems that elimination of seasonal granularity may "hide" otherwise non-linear relationships, which can be depicted by the scatterplot matrix below. Correlation of unemployment series against auto sales series remains moderate for more than 12 lags, and it peaks at lag 5 and 6. 
+
+```{r}
+astsa::lag2.plot(auto.intersect.ts, unem.intersect.ts,15)
+```
+
+```{r}
+ccf(auto.intersect.ts, unem.intersect.ts, main = "", 
+    lag.max = 61, xaxt = "n")
+axis(side = 1, at = seq(-5,5,0.5))
+title("Auto Sales vs Unemployment")
+```
+
+The ccf plot above assess the cross-correlation $\hat{\rho}_{xy}(h) = \frac{\hat{\gamma}_{xy}(h)}{\sqrt{\hat{\gamma}_x(0)\hat{\gamma}_y(0)}}$ based on the cross-covariance function $\hat{\gamma}_{xy}(h) = n^{-1}\sum_{t = 1}^{n-h}(x_{t+h} - \bar{x})(y_t - \bar{y})$, where $x_t$ refers to the auto sales series, $y_t$ refers to the unemployment series, $h$ refers to the number of lags in the auto sales series and $n$ refers to the number of monthly observations considered. The ccf occurs mostly at the negative lags and peaks somewhere at lag 5 to 6, this indicate that auto sales series clearly leads the unemployment series.
+
+
+### Testing for Cointegration
+
+Based on the unit root test results conducted in the univariate section and the moderate, negative linear correlation observed just above. There is some chance that our two series are cointegrated. We conduct the Phillips-Ouliaris Cointegration Test here with the null hypothesis: 
+
+  - Ho: The two series are not cointegrated
+  - Ha: the two series are cointegrated
+  
+
+
+```{r}
+tseries::po.test(cbind(auto.intersect.ts, unem.intersect.ts))
+```
+The po.test results provides evidence that the series are cointegrated since the null hypothesis is rejected at the 1% level.
+  
+If there truely exists a linear combination between the two series that is stationary, regressing unemployment series on auto sales should produce residuals that are some what stationary (though it can still be time dependent). We conduct such a model below to examine the residual series.
+
+```{r}
+unem.auto.lm = lm(unem.intersect.ts~auto.intersect.ts)
+#summary(unem.auto.lm)
+unem.auto.lm$coefficients[2]
+as.numeric(unem.auto.lm$coefficients[2]/sd(unem.intersect.ts))
+```
+
+```{r}
+car::residualPlot(unem.auto.lm)
+```
+
+From the regression output above, the coefficient estimate for auto sales is not practically significant(less than 1% standard deviation of unemployment rate). The residual plot also shows strong curvature. Auto sales at lag 0 don't effectively explain variations in unemployment in expectation.
+
+```{r}
+par(mfrow = c(2,1))
+ts.plot(unem.intersect.ts, main = "",
+        ylab = "Unemployment Rate")
+title("Unemployment Rate")
+unem.auto.lm.res = resid(unem.auto.lm)
+plot(unem.auto.lm.res, xlab = "t", ylab = "Residuals",
+     lty = 1, pch = 1, type = "l")
+title("Residual Series Unemployment ~ Auto Sales")
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+acf(unem.auto.lm.res,61, main = "")
+pacf(unem.auto.lm.res,61, main = "")
+```
+
+From the time plots and acf plots, the residual series still picks up most of the random walk behaviors in the unemployment rate. The acf and pacf plots still show evidence of a strong AR(1) process. Contradicting the cointegration test results, these residual plots don't fully support the existence of linear combination between the two series that is entirely stationary. 
+
+There is clearly a linear relationship between the unemployment and auto sales, but the two are not necessarily cointegrated for models like VECM to be valid. Our poor OLS residual behavior also demonstrated that OLS is not appropriate, on top of the fact that such a model cannot do forecast on any given time point.
+
+### Establish Stationarity for VAR models
+
+An alternative is to construct a VAR model which requires stationary input series. Our unit root test provided strong evidence of unit root in the unemployment series and weak evidence for that in the auto sales series, and our univariate plots exhibit noticeable seasonal patterns. We proceed to examine the cross-correlation plots between the differenced series.
+
+```{r}
+combined.diff = ts.intersect(unem.ts.diff, auto.ts.diff)
+unem.intersect.ts.diff = combined.diff[,1]
+auto.intersect.ts.diff = combined.diff[,2]
+
+#head(combined.diff);tail(combined.diff)
+
+ccf(auto.intersect.ts.diff, unem.intersect.ts.diff, main = "", 
+    lag.max = 61, xaxt = "n")
+axis(side = 1, at = seq(-5,5,0.5))
+title("First Differenced Series: Auto Sales vs Unemployment")
+```
+
+Cross-correlation for the first differenced series shows obvious significant values around lag 12, 24, 36, 48, and so on. This says that our VAR model can be more effective if the series are differenced, or accounted by seasonal variables.
+
+```{r}
+combined.diff12 = ts.intersect(unem.ts.diff12, auto.ts.diff12)
+unem.intersect.ts.diff12 = combined.diff12[,1]
+auto.intersect.ts.diff12 = combined.diff12[,2]
+
+ccf(auto.intersect.ts.diff12, unem.intersect.ts.diff12, main = "", 
+    lag.max = 61, xaxt = "n")
+axis(side = 1, at = seq(-5,5,0.5))
+title("Seasonal Differenced Series: Auto Sales vs Unemployment")
+```
+
+Cross-correlation for the seasonally differenced series shows obvious gradual decay around lag 3-7 and 36, which can be the effect of the inherent unit roots. This suggests that we should try first differencing the two series for the VAR model.
+
+```{r}
+combined.diff.diff12 = ts.intersect(unem.ts.diff.diff12, auto.ts.diff.diff12)
+unem.intersect.ts.diff.diff12 = combined.diff.diff12[,1]
+auto.intersect.ts.diff.diff12 = combined.diff.diff12[,2]
+
+
+ccf(auto.intersect.ts.diff.diff12, unem.intersect.ts.diff.diff12, main = "", 
+    lag.max = 61, xaxt = "n")
+axis(side = 1, at = seq(-5,5,0.5))
+title("First and Seasonally Differenced Series: Auto vs Unempl.")
+```
+
+The cross-correlation for the first and seasonally differenced series show slightly significance at lag -54 and lag 34. 
+
+The above cross-correlation study and earlier unit root tests suggest that we should consider the following as input for the VAR models:
+
+  -	Both series first differenced and seasonal variable. Lags undetermined.
+  -	Both series seasonally differenced and include 4:6 lags
+  -	Both series first and seasonally differenced. Lags undetermined.
+
+
+
+#Model Specification 
+
+```{r}
+#split into train and test
+unem.train = unem.data[0:816,]
+unem.test = unem.data[817:834,]
+unem.train.ts = ts(unem.train$UNRATENSA)
+unem.test.ts = ts(unem.test$UNRATENSA)
+```
+
+## Construct and Loop Through Search Spaces
+
+From the EDA, we speculated the following models:
+
+  - Seasonal Differenced Series: SARIMA(4,0,1)(3,1,Q)
+  - First Differenced Series: SARIMA(9,1,q)(1,0,1)
+  - First and Seasonal Differenced Series: SARIMA(4,1,0)(0,1,1)
+
+Because the EDA was inconclusive on differencing strategies, we define the following search spaces:
+
+  - Seasonal Differenced Series: SARIMA(1:4,0,0:3)(0:4,1,0:3)
+  - First Differenced Series: SARIMA(1:9,1,0:3)(0:3,0,0:3) 
+  - First and Seasonal Differenced Series: SARIMA(0:5,1,0:3)(0:3,1,0:3)
+
+where SARIMA(p,d,q)(P,D,Q)_12 is the general form of model.
+
+Since we cannot directly compare the AICs of models with different orders of differencing, we explore each of these separately. We will identify the models from each search space with the best AIC, then examine the behavior of the residuals and the out of sample fit in order to compare across different orders of differencing. 
+
+```{r,eval = FALSE}
+# READ LOOP RESULTS FROM THE CSV FILES
+
+# Seasonal Differenced Series : SARIMA(1:4,0,0:3)(0:4,1,0:3)
+bestAIC <- 10000 
+unem.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+
+for(p in 1:4){
+  for (q in 0:3){
+    for (P in 0:4){
+      for (Q in 0:3){
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 0, q), 
+                       seasonal = list(order = c(P, 1, Q), period = 12)))
+        
+        if(m$aic < bestAIC) 
+          # update if this model attain better aic
+        { bestAIC = m$aic
+          bestFit = m
+          bestModel = c( p, q, P, Q)
+          cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+          unem.diff12.df = rbind(unem.diff12.df, 
+                                 data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                            "aic" = bestAIC))} 
+      }
+    }
+  }
+}
+
+unem.diff12.df = unem.diff12.df[seq(dim(unem.diff12.df)[1],1),]
+write.csv(x = unem.diff12.df, file = "unem.diff12.df.csv")
+
+# First Differenced Series: SARIMA(1:9,1,0:3)(0:3,0,0:3) 
+
+bestAIC <- 10000 
+
+unem.diff.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+
+for(p in 1:9){
+  for (q in 0:3){
+    for (P in 0:3){
+      for (Q in 0:3){
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q),
+                       seasonal = list(order = c(P, 0, Q), period = 12)),
+            silent = TRUE)
+        
+        if(m$aic < bestAIC) 
+          # update if this model attain better aic
+        { bestAIC = m$aic
+        bestFit = m
+        bestModel = c( p, q, P, Q)
+        cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+        unem.diff.df = rbind(unem.diff.df, 
+                               data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                          "aic" = bestAIC))} 
+      }
+    }
+  }
+}
+
+unem.diff.df = unem.diff.df[seq(dim(unem.diff.df)[1],1),]
+write.csv(x = unem.diff.df, file = "unem.diff.df.csv")
+
+# First and Seasonal Differenced Series: SARIMA(0:5,1,0:3)(0:3,1,0:3) 
+
+bestAIC <- 10000 
+
+unem.diff.diff12.df = data.frame("p" = 0, "q" = 0, "P" = 0, "Q" = 0, "aic" = bestAIC)
+
+for(p in 0:5){
+  for (q in 0:3){
+    for (P in 0:3){
+      for (Q in 0:3){
+        cat(p,q,P,Q,"\n")
+        try(m <- Arima(unem.train.ts, order = c(p, 1, q), 
+                       seasonal = list(order = c(P, 1, Q), period = 12)),
+            silent = TRUE)
+        
+        if(m$aic < bestAIC) 
+          # update if this model attain better aic
+        { bestAIC = m$aic
+        bestFit = m
+        bestModel = c( p, q, P, Q)
+        cat(p,q,P,Q,as.numeric(bestAIC), "\n")
+        unem.diff.diff12.df = rbind(unem.diff.diff12.df, 
+                             data.frame("p" = p, "q" = q, "P" = P, "Q" = Q, 
+                                        "aic" = bestAIC))} 
+      }
+    }
+  }
+}
+
+unem.diff.diff12.df = unem.diff.diff12.df[seq(dim(unem.diff.diff12.df)[1],1),]
+write.csv(x = unem.diff.diff12.df, file = "unem.diff.diff12.df.csv")
+```
+
+### Seasonal Differenced Search Result
+
+```{r}
+unem.diff12.df = read.csv("unem.diff12.df.csv")
+cat("Top candidates for seasonal differenced model: d = 0, D = 1 \n")
+unem.diff12.df$AIC<-round(unem.diff12.df$aic,3)
+head(unem.diff12.df[,c(3:6,8)],8)
+```
+
+For the Seasonally Differenced search space, the model with the best AIC is a SARIMA(4,0,3)(0,1,1)[12]. We will further evaluate this model in later sections.
+
+### First Differenced Search Result
+
+```{r}
+unem.diff.df = read.csv("unem.diff.df.csv")
+cat("Top candidates for first differenced model: d = 1, D = 0 \n")
+unem.diff.df$AIC<-round(unem.diff.df$aic,3)
+head(unem.diff.df[,c(3:6,8)],8)
+```
+
+For the First Differenced search space, the model with the best AIC is a SARIMA(8,1,3)(1,0,1)[12]. We will further evaluate this model in later sections.
+
+### First and Seasonal Differenced Search Result
+
+```{r}
+unem.diff.diff12.df = read.csv("unem.diff.diff12.df.csv")
+cat("Top candidates for first and seasonal differenced model: d = 1, D = 1 \n")
+unem.diff.diff12.df$AIC<-round(unem.diff.diff12.df$aic,3)
+head(unem.diff.diff12.df[,c(3:6,8)],8)
+```
+
+For the First and Seasonally Differenced search space, the model with the best AIC is a SARIMA(2,1,3)(1,1,1)[12]. We will further evaluate this model in later sections.
+
+
+Using the results above, we attempt to simplify the order of the top candidate for each search space by comparing their residuals against respective lower order models.
+
+### Seasonal Differenced Models ( d = 0 , D = 1)
+
+```{r, warning=FALSE}
+# top (4,0,3)(0,1,1)
+m.diff12.1 <- Arima(unem.train.ts, order = c(4, 0, 3), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 2nd (3,0,1)(0,1,1)
+m.diff12.2 <- Arima(unem.train.ts, order = c(3, 0, 1), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+
+# 7th (2,0,1)(0,1,1)
+m.diff12.7 <- Arima(unem.train.ts, order = c(2, 0, 1), 
+                    seasonal = list(order = c(0, 1, 1), period = 12))
+```
+
+```{r}
+# Function to print residual charts
+print_resid_chart <- function(mod) {
+  cat("Model SARIMA ", c(mod$arma[1], mod$arma[6], mod$arma[2],
+                         mod$arma[3], mod$arma[7], mod$arma[4]) , ":\n")
+  cat("AIC: ",(mod$aic),"\n")
+  cat("BIC: ",(mod$bic),"\n")
+  qqnorm(mod$residuals,main="Normal Q-Q Plot of Residuals")
+  hist(mod$residuals, main="Histogram of Residuals",xlab="Residuals")
+  acf<-acf(mod$residuals, 100 ,plot=FALSE)
+  pacf<-pacf(mod$residuals, 100 ,plot=FALSE)
+  plot(acf, main="ACF of Residuals")
+  plot(pacf, main="PACF of Residuals")
+}
+```
+
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# top (4,0,3)(0,1,1)
+print_resid_chart(m.diff12.1)
+
+# top (4,0,3)(0,1,1)
+Box.test(m.diff12.1$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+Examining the residuals from our first candidate model SARIMA(4,0,3)(0,1,1)[12], we note from the histogram and Normal Q-Q Plot that the residuals are not quite normally distributed, since there is one extreme outlier on the right side of the plot. The ACF plot has a few spikes that are nearly significant, but nothing alarming. The PACF plot does show some spikes that are significant, indicating that the residuals may not perfectly resemble white noise. However, the Ljung-Box test fails to reject the null hypothesis that the residuals are independently distributed. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 2nd (3,0,1)(0,1,1)
+print_resid_chart(m.diff12.2)
+
+# 2nd (3,0,1)(0,1,1)
+Box.test(m.diff12.2$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+The residuals for the simpler model SARIMA(3,0,1)(0,1,1)[12] are very similar to the first model, although the PACF plot has fewer spikes that are near significance.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 7th (2,0,1)(0,1,1)
+print_resid_chart(m.diff12.7)
+
+# 7th (2,0,1)(0,1,1)
+Box.test(m.diff12.7$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+Simplifying even further to a SARIMA(2,0,1)(0,1,1)[12], which was the 7th candidate based on the AIC, we note that the residual diagnostics are very similar to the previous model. 
+
+For seasonally differenced models, we simplified from the top AIC candidate, SARIMA(4,0,3)(0,1,1)[12] to the 7th candidate SARIMA(2,0,1)(0,1,1)[12] and retain or even improved white noise residual behavior. We will keep these two candidates to compare out of sample performance:
+
+	- SARIMA(4,0,3)(0,1,1)[12]
+	- SARIMA(2,0,1)(0,1,1)[12]
+	
+We also performed the Ljung-Box test above for our residual series to see if residuals for these models are independently distributed. Test hypothesis is as follows:
+
+  - Ho : The residuals are independently distributed
+  - Ha : The residuals are not independently distributed 
+  
+The tests fail to reject the null hypothesis, thus supporting that the residuals resemble white noise.
+
+
+### First Differenced Models ( d = 1 , D = 0)
+Next we will fit several first differenced models and examine residual diagnostics similar to our process above.
+
+```{r, warning=FALSE}
+# top (8,1,3)(1,0,1)
+m.diff.1 <- Arima(unem.train.ts, order = c(8, 1, 3), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 3rd (2,1,1)(1,0,1)
+m.diff.3 <- Arima(unem.train.ts, order = c(2, 1, 1), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 6th (1,1,1)(1,0,1)
+m.diff.6 <- Arima(unem.train.ts, order = c(1, 1, 1), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+
+# 7th (1,1,0)(1,0,1)
+m.diff.7 <- Arima(unem.train.ts, order = c(1, 1, 0), 
+                  seasonal = list(order = c(1, 0, 1), period = 12))
+```
+
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# top (8,1,3)(1,0,1)
+print_resid_chart(m.diff.1)
+
+# top (8,1,3)(1,0,1)
+Box.test(m.diff.1$residuals, lag=25, type = c("Ljung-Box"))
+```
+First, we start with the model that had the best AIC within the First Differenced search space, a SARIMA(8,1,3)(1,0,1)[12]. Again, the residuals are approximately normally distributed, with the exception of one outlier. The ACF plot does not have anly particularly significant spikes. The PACF plot does have a few significant spikes. However, since we have 100 lags showing on this plot, 5 of them may be significant just by chance, and this is not too concerning. The Ljung-Box test fails to reject the null hypothesis that the residuals are independently distributed, further supporting our characterization of the residuals as white noise. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# third (2,1,1)(1,0,1)
+print_resid_chart(m.diff.3)
+
+# third (2,1,1)(1,0,1)
+Box.test(m.diff.3$residuals, lag=25, type = c("Ljung-Box"))
+```
+Next, we fit a much simpler model which also had a reasonably low AIC, a SARIMA(2,1,1)(1,0,1)[12]. The residual diagnostics for this model are similar to the previous model, so we have not sacrificed the white noise of the residuals from this simplification. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 6th (1,1,1)(1,0,1)
+print_resid_chart(m.diff.6)
+
+# 6th (1,1,1)(1,0,1)
+Box.test(m.diff.6$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+Next, we simplify the model one step further, with a SARIMA(1,1,1)(1,0,1)[12]. However, at this point, the PACF has additional spikes that are significant or nearly significant, and more spikes than would happen by chance. Therefore, this level of simplification may be too extreme. However, the Ljung-Box test still fails to reject the null hypothesis that the residuals are independently distributed. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 7th (1,1,0)(1,0,1)
+print_resid_chart(m.diff.7)
+
+# 7th (1,1,0)(1,0,1)
+Box.test(m.diff.7$residuals, lag=25, type = c("Ljung-Box"))
+```
+Once we simplify the model to SARIMA(1,1,0)(1,0,1)[12], the residuals no longer resemble white noise. This can be seen from the PACF plot, where there are very significant spikes at early lags. In this case, the Ljung-Box test strongly rejects the null hypothesis that the residuals are independently distributed. 
+
+
+For first differenced models, we reduced from the top AIC candidate, SARIMA(8,1,3)(1,0,1)[12] to the 3rd candidate SARIMA(2,1,1)(1,0,1)[12] and retain white noise residual behavior. The 6th candidate SARIMA(1,1,1)(1,0,1)[12] is still satisfactory but more of its lags are slightly closer to the cut-off. The 7th candidate SARIMA(1,1,0)(1,0,1)[12] starts to show significant spikes on the PACF plot at lag 2, 3 and 5. Therefore we stop searching from there downwards. We will keep the first three candidates to compare out of sample performance:
+
+	- SARIMA(8,1,3)(1,0,1)[12]
+	- SARIMA(2,1,1)(1,0,1)[12]
+	- SARIMA(1,1,1)(1,0,1)[12]
+	
+The Box-Ljung tests above failed to reject the null hypothesis for all three models to support that our residuals are independently distributed.
+
+### First and Seasonal Differenced Models ( d = 1 , D = 1)
+
+Next, we fit models that are both First Differenced and Seasonally Differenced and examine the residuals of these.
+
+```{r, warning=FALSE}
+# top (2,1,3)(1,1,1)
+m.diff.diff12.1 <- Arima(unem.train.ts, order = c(2, 1, 3), 
+                         seasonal = list(order = c(1, 1, 1), period = 12))
+
+# 2nd (2,1,1)(0,1,1)
+m.diff.diff12.2 <- Arima(unem.train.ts, order = c(2, 1, 1), 
+                         seasonal = list(order = c(0, 1, 1), period = 12))
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# top (2,1,3)(1,1,1)
+print_resid_chart(m.diff.diff12.1)
+
+# top (2,1,3)(1,1,1)
+Box.test(m.diff.diff12.1$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+We begin with the model which has the lowest AIC within its search space, the SARIMA(2,1,3)(1,1,1)[12]. We note again that the residuals for this model are approximately normally distributed, with the exception of one outlier. Both the ACF and PACF plots show no more significant spikes than what would happen by chance. The residuals for this plot look very similar to white noise. The Ljung-Box test also fails to reject the null hypothesis that the residuals are independently distributed. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 2nd (2,1,1)(0,1,1)
+print_resid_chart(m.diff.diff12.2)
+
+# 2nd (2,1,1)(0,1,1)
+Box.test(m.diff.diff12.2$residuals, lag=25, type = c("Ljung-Box"))
+```
+
+If we simplify this model to a SARIMA(2,1,1)(0,1,1)[12] the residual diagnostic plots look fairly similar. The PACF plot does show a few more significant spikes, but there are still fewer than what might happen by chance, so we are not concerned that we have lost our well-behaved residuals as a result of simplifying the model. The Ljung-Box test again fails to reject the null hypothesis that the residuals are independently distributed.
+
+For first and seasonal differenced models, we reduced from the top AIC candidate, SARIMA(2,1,3)(1,1,1) to the 2nd candidate SARIMA(2,1,1)(0,1,1) with similar white noise behaviors. We will keep both of these candidates to compare out of sample performance:
+
+	- SARIMA(2,1,3)(1,1,1)
+	- SARIMA(2,1,1)(0,1,1)
+	
+### Compare models based on out of sample errors until June 2017
+
+(A.i)How well does your model predict the unemployment rate up until June 2017? 
+
+```{r}
+# candidate models
+# SARIMA(4,0,3)(0,1,1) m.diff12.1
+# SARIMA(2,0,1)(0,1,1) m.diff12.7
+# SARIMA(8,1,3)(1,0,1) m.diff.1
+# SARIMA(2,1,1)(1,0,1) m.diff.3
+# SARIMA(1,1,1)(1,0,1) m.diff.6
+# SARIMA(2,1,3)(1,1,1) m.diff.diff12.1
+# SARIMA(2,1,1)(0,1,1) m.diff.diff12.2
+
+candidate_mods = list(m.diff12.1,m.diff12.7,m.diff.1,m.diff.3,
+                      m.diff.6,m.diff.diff12.1,m.diff.diff12.2)
+```
+
+In order to measure the out of sample fit, we calculate the Root Mean Squared Error of each model's forecast compared to the observed data from January 2016-June 2017.
+The Root Mean Squared Error is given as:
+
+$RMSE = \sqrt{\frac{1}{n}\sum{(y_i-\hat{y_i})^2}}$
+
+where $y_i$ is the observed data and $\hat{y_i}$ is the forecasted data. 
+
+```{r}
+# function to get RMSE
+get_RMSE = function(test.df, mod, ahead){
+  f = forecast(mod, ahead)$mean
+  sq.error = (test.df$UNRATENSA - f)^2
+  rmse = sqrt(mean(sq.error))
+  return (data.frame( "p" = mod$arma[1], "d" = mod$arma[6], "q" = mod$arma[2],
+                      "P" = mod$arma[3], "D" = mod$arma[7], "Q" = mod$arma[4],
+                      "RMSE" = rmse))
+}
+```
+
+```{r}
+RMSE.df = data.frame()
+for (i in 1:length(candidate_mods)) {
+  add.df = get_RMSE(unem.test, candidate_mods[[i]], 18)
+  RMSE.df = rbind(RMSE.df, add.df)
+}
+RMSE.df = RMSE.df[order(RMSE.df$RMSE),]
+RMSE.df
+```
+
+Out of sample errors tells us that SARIMA(2,1,1)(1,0,1), SARIMA(2,1,1)(0,1,1), and SARIMA(1,1,1)(1,0,1) perform superior to the other candidates and their RMSEs are very close. We plot their forecasts to further compare these three. We also include a plot of the model with the residuals that most closely resembled white noise, a SARIMA(2,1,3)(1,1,1)[12.]
+
+```{r}
+unem.actual.ts = ts(unem.data$UNRATENSA)
+# (2,1,1)(1,0,1)
+f.diff.3<-forecast(m.diff.3,18)
+# (2,1,1)(0,1,1)
+f.diff.diff12.2<-forecast(m.diff.diff12.2,18)
+# (1,1,1)(1,0,1)
+f.diff.6<-forecast(m.diff.6,18)
+# (2,1,3)(1,1,1)
+f.diff.diff12.1<-forecast(m.diff.diff12.1,18)
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+plot(f.diff.3, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+legend("topleft",col=c("blue","red"), 
+       legend=c("SARIMA Forecast","Observed Data"),
+       lty=c(1,1))
+
+plot(f.diff.diff12.2, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+plot(f.diff.6, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+plot(f.diff.diff12.1, xlim = c(818,834))
+lines(unem.actual.ts,type="l",col="red")
+
+```
+
+All of the first three models predict very closely to the test data. SARIMA(2,1,1)(1,0,1) performs the closest in the time plots, and it has the lowest RMSE of 0.147. 
+
+Based on the criteria of the performance of residuals and the out of sample fit, we have two conflicting choices for the "best" model. 
+
+Based on the performance of the residuals, a SARIMA(2,1,3)(1,1,1)[12] had residuals that most closely resembled white noise. However, as seen from the plot above, it does a poor job of accurately predicting the test data. 
+
+Based on the out of sample fit, the SARIMA(2,1,1)(1,0,1)[12] performs the best, since it very accurately predicted the test data from January 2016-June 2017. We recall that the residuals for this model were not considerably different from white noise. 
+
+Since our primary task is to forecast unemployment, we will prioritize the out of sample fit and choose the SARIMA(2,1,1)(1,0,1)[12] as our best model. 
+
+We will use this model to forecast unemployment rate until 2020. Before that, the model specification is given by the following:
+
+```{r}
+m.diff.3$coef
+```
+
+```{r}
+# characteristic equation for differenced AR component
+Mod(polyroot(c(1,-0.5986,-0.1241)))
+# characteristic equation for differenced SAR component
+Mod(polyroot(c(1,-0.9918)))
+# characteristic equation for differenced MA component
+Mod(polyroot(c(1,-0.4846)))
+# characteristic equation for differenced SMA component
+Mod(polyroot(c(1,-0.7583)))
+```
+
+
+$$(1 - \Theta B^{12})(1 - \theta_1 B - \theta_2 B^2)(1-B)x_t = (1 + \Phi B^{12})(1 + \phi B)w_t$$
+where $\Theta = +0.9918$, $\theta_1 = + 0.5986$, $\theta_2 = +0.1241$, $\Phi = -0.7583$, $\phi = -0.4846$.
+
+Based on this specification, we note the following:
+
+  - A unit root on the left specified by $(1-B)$, which was taken care of by first differencing. 
+  
+  - The first differenced AR component has characteristic equation $1 - 0.5986 B - 0.1241 B^2 = 0$, the roots for $B$ are 1.313 and 6.136. The first differenced seasonal component has characteristic equation $1 - 0.9918 B^{12} = 0$, the root for $B^{12}$ is 1.008. All roots exceed unity which means the first differenced series is stationary.
+  
+  - The first differenced MA component has characteristic equation $1 - 0.4846 B= 0$, the roots for $B$ is 2.064. The first differenced seasonal MA component has characteristic equation $1 - 0.7583 B^{12}= 0$, the roots for $B^{12}$ is 1.319. All roots exceed unity which means the first differenced series is invertible.
+  
+
+### Forecast until 2020
+
+**(A.ii) What does the unemployment rate look like at the end of 2020? How credible is this estimate?**
+
+```{r}
+#817 2016 Jan
+#forecast.sarima.ts = ts(forecast(m.diff.3,h=60)$mean, start = c(2016,1), frequency = 12)
+  
+par(mfrow = c(1,1))
+
+#forecast out to Dec 2020 
+plot(forecast(m.diff.3,h=60))
+plot(forecast(m.diff.3,h=60),xlim=c(800,876))
+```
+
+```{r}
+f.diff.3.2020<-forecast(m.diff.3,h=60)
+
+expected<-f.diff.3.2020$mean[60]
+lowerbound<-f.diff.3.2020$lower[60,2]
+upperbound<-f.diff.3.2020$upper[60,2]
+```
+
+Forecast 2020 December -- Expected Value: `r expected`
+
+Forecast 2020 December -- 95% Lower Confidence Bound: `r lowerbound`
+
+Forecast 2020 December -- 95% Upper Confidence Bound: `r upperbound`
+
+As we can see from the forecast time plots above, the confidence bounds of forecast expand drastically towards 2020. Although the mean value is expected to be $2.5835$, this estimate is not very credible. The confidence interval is so wide that either a continued decreasing or increasing trend is possible. One additional concern is that the confidence interval includes negative values, which is not possible for an unemployment rate.
+
+
+**(B) Build a linear time-regression and incorporate seasonal effects. Be sure to evaluate the residuals and assess this model on the basis of the assumptions of the classical linear model, and then produce a 1 year and a 4 year forecast.**
+
+```{r}
+# Kernel smoothing
+unem.k.smooth.widest = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 50)
+
+unem.k.smooth.wide = ksmooth(time(unem.ts), 
+                             unem.ts, kernel = c("normal"), 
+                             bandwidth = 25)
+
+unem.k.smooth.narrow = ksmooth(time(unem.ts), 
+                               unem.ts, kernel = c("normal"), 
+                               bandwidth = 10)
+# Make plot
+plot(unem.ts, col = "gray", ylab = "Unemployment Rate",
+     main = "Unemployment Rate - Kernel Smoothed")
+lines(unem.k.smooth.widest$x, unem.k.smooth.widest$y, 
+      col = "black", lty = "dotted")
+lines(unem.k.smooth.wide$x, unem.k.smooth.wide$y, 
+      col = "black", lty = "solid", lwd = 2)
+lines(unem.k.smooth.narrow$x, unem.k.smooth.narrow$y, 
+      col = "black", lty = "dotdash")
+abline(lm(unem.ts~time(unem.ts)), lty = "dotted", col = "black")
+legend("topleft", legend = c("bw50", "bw25", "bw10", "lm", "raw"),
+       lty = c("dotted","solid", "dotdash","dotted", "solid"), bty = "n",
+       col = c("black", "black", "black", "black", "gray"))
+```
+
+Continuing the insights from our EDA, the time series of unemployment rate has an upward trend and shows some quadratic behavior. Therefore we can estimate a model with quadratic term of time. We attempt to explain seasonal behavior using a dummy variable for each month. Candidate Models are:
+
+$$X_t = \beta_0 + \beta_t time + \beta_m month + \epsilon$$
+
+$$X_t = \beta_0 + \beta_t time + \beta_{t2} time^2 +  \mathbf{\beta_m} \mathbf{month} + \epsilon$$
+
+where $time$ is an annual unit, each additional month is expressed as a fraction of the year. $month$ is a categorical variable that is broken down into indicator variables.
+
+```{r}
+# Preparing data
+unem.ts = ts(unem.data$UNRATENSA, frequency = 12, start = c(1948,1)) 
+
+unem.train.ts = window(unem.ts, end = c(2015,12))
+unem.test.ts = window(unem.ts, start = c(2016,01))
+
+y.lm = as.numeric(unem.train.ts)
+t.lm = as.numeric(time(unem.train.ts))
+mon.lm = as.factor(cycle(unem.train.ts))
+```
+
+```{r}
+#Fit Linear Models
+unem.lm = lm(y.lm ~ t.lm + mon.lm)
+unem.lm.quad = lm(y.lm ~ t.lm + I(t.lm^2) + mon.lm)
+
+#Calculate AIC
+lm.aic<-round(AIC(unem.lm),2)
+lm.quad.aic<-round(AIC(unem.lm.quad),2)
+
+#Calcualte Heteroskedastic Robust Standard Errors
+se.lm = sqrt(diag(vcovHC(unem.lm)))
+se.lm.quad = sqrt(diag(vcovHC(unem.lm.quad)))
+```
+
+```{r,results='asis'}
+stargazer(unem.lm,unem.lm.quad,
+          se = list(se.lm, se.lm.quad),
+          keep.stat=c("rsq","adj.rsq","n","f"),
+          add.lines = list(c("AIC", lm.aic, lm.quad.aic)),
+          type="latex")
+```
+
+Our quadratic model performs slightly better than the linear model by AIC and Adjusted R-squared (See Table 1). The F-statistic and F-test p-value strongly reject that null hypothesis that our coefficients are not jointly significant thus supporting explanatory power of our model. 
+
+```{r}
+car::linearHypothesis(unem.lm.quad, c("mon.lm2 = 0", "mon.lm3 = 0",
+                                      "mon.lm4 = 0", "mon.lm5 = 0",
+                                      "mon.lm6 = 0", "mon.lm7 = 0",
+                                      "mon.lm8 = 0", "mon.lm9 = 0",
+                                      "mon.lm10 = 0", "mon.lm11 = 0",
+                                      "mon.lm12 = 0"), vcov = vcovHC)
+```
+
+The second F-test result also provides evidence that our month variable is significant. We will proceed with this quadratic model for a better fit. Our estimated model is specified as:
+
+$\hat{X_t} = -3389 + 3.396 time - 0.0008487 time^2 +  -0.805\cdot I(Apr) -0.9518\cdot I(May) -0.5144\cdot I(Jul) \\ - 0.8229\cdot I(Aug) - 1 \cdot I(Sep) -1.169 \cdot I(Oct) -0.9982 \cdot I(Nov) -0.9596 \cdot I(Dec)$
+
+Notice that we have dropped some month indicator variables in the specification, because they are not statistically different from the base variable January. Along with the negative sign of the significant indicator variables, the estimations agrees with our earlier month plot in the EDA section that the beginning and middle of each year tend to have higher unemployment rates.
+
+
+```{r}
+plot(effects::allEffects(unem.lm.quad)[c(1,3)], 
+     main = "Effect Plots")
+```
+
+The time effect plot above shows the fitted curve with a positive, gradually leveling slope and expanding confidence interval with the increase in time. Also, the month effect plot shows discrete levels and the model clearly distinguishes early and mid year from the other months. Both plots align with our EDA findings. To further examine the internal validity of our model, we evaluate the validity of our model by the 6 CLM assumptions:
+
+1. Linearity in Parameters: This is a weak assumption, we have specified our model with linear coefficients.
+
+2. Random sample of data: We clearly have violated this assumption because the observations are serially correlated, as demonstrated in the autocorrelation plots in the EDA. The strongly time dependent residuals plotted below demonstrates that our observations could not have been independent in the first place.
+
+```{r}
+plot(unem.lm.quad$residuals, type = "l", 
+     main = "Residuals Time Plot - Linear Regression Model")
+```
+
+3. No perfect co-linearity: Each year has 12 months, therefore the time variable is not correlated with month.
+
+4. Zero-conditional mean. From the residuals vs fitted values plot, there is a clear curvature of the loess curve from line zero. We tried a separate model with the cubic term of time but the curvature was only flipped not flattened. We could be missing an important variable here. This assumption is violated.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+plot(unem.lm.quad, which = 1)
+plot(unem.lm.quad, which = 3)
+abline(h = c(sqrt(2),sqrt(3)), col = "green", lty = "dotted")
+```
+
+5. Homoskedasticity of errors: The variance of residuals noticeably expands towards higher fitted values. The Loess curve on the scale-location plot clearly picks up at the same time. The Breusch-Pagan test strongly rejects the null hypothesis of homoskedasticity. This assumption is violated. 
+
+```{r}
+lmtest::bptest(unem.lm.quad)
+```
+
+6. Normally distributed error: From the Normal Q-Q plot and histogram, our residuals are clearly right skewed. The Shapiro test also strongly rejects the null hypothesis that our residuals are normally distributed.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+hist(unem.lm.quad$residuals, xaxt = "n",
+     main = "Residuals of Linear Regression Model")
+axis(side = 1, at = seq(-2.5,4.5,0.5))
+abline(v = mean(unem.lm.quad$residuals), col = "red")
+abline(v = median(unem.lm.quad$residuals), col = "green")
+legend("topright", legend = c("Mean", "Median"),
+       col = c("red", "green"), bty = "n", 
+       lty = c("solid", "solid"))
+
+plot(unem.lm.quad, which = 2)
+```
+
+```{r}
+shapiro.test(unem.lm.quad$residuals)
+```
+
+7. Outlier Analysis (Not a CLM assumption): From the scale-location plot above, we see a number of standardized residuals lying outside the threshold of 2 and 3 standard deviations. This says that our model represents variations in our data poorly. None of the observations are close to cook's distance of 0.5 so there are no extreme outliers.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+plot(unem.lm.quad, which = 5)
+abline(h = c(2,3), col = "green", lty = "dotted")
+plot(unem.lm.quad, which = 4)
+```
+
+(B.i) How well does your model predict the unemployment rate up until June 2017?
+(B.ii) What does the unemployment rate look like at the end of 2020? How credible is this estimate?
+(B.iii) Compare this forecast to the one produced by the SARIMA model. What do you notice?
+
+### Prediction Through 2017
+
+```{r}
+test.time = seq(2016,2017.417,by = (1/12))
+test.month = c(seq(1,12),seq(1,6))
+
+test.prediction = predict.lm(object = unem.lm.quad, se.fit = T,
+           newdata = data.frame(t.lm = test.time, mon.lm = as.factor(test.month)))
+```
+
+```{r}
+data.frame("year" = floor(test.time),
+           "month" = test.month,
+           "lm mean" = test.prediction$fit,
+           "lm error" = test.prediction$fit - unem.test$UNRATENSA,
+           "SARIMA mean" = as.numeric(f.diff.3$mean),
+           "SARIMA error" = as.numeric(f.diff.3$mean) - unem.test$UNRATENSA)
+```
+
+```{r}
+sarima.err = as.numeric(f.diff.3$mean) - unem.test$UNRATENSA 
+lm.err = test.prediction$fit - unem.test$UNRATENSA
+
+sarima.rmse = sqrt(mean(sarima.err^2))
+lm.rmse = sqrt(mean(lm.err^2))
+```
+
+SARIMA RMSE: `r sarima.rmse`
+
+Linear Model RMSE: `r lm.rmse`
+
+In comparison with the ARIMA model, the linear regression model has much poorer out-of-sample performance. The above table shows that the linear model predictions are consistently off by 1 to 2 units, while the SARIMA model predictions are only off from -0.4 to +0.2 units. Also, the RMSE of our SARIMA model is less than 10% of the RMSE of the linear model. 
+
+```{r}
+plot(unem.ts, xlim = c(1948,2017.417),
+     main = "Raw Series vs Model Fits")
+
+lines(y = unem.lm.quad$fit, x = t.lm, col = "red")
+lines(y = test.prediction$fit, x = test.time, col = "red")
+
+lines(y = m.diff.3$fitted, x = t.lm, col = "blue")
+lines(y = as.numeric(f.diff.3$mean), x = test.time, col = "blue")
+
+legend("topleft", col = c("blue","red","black"),
+       legend = c("SARIMA",
+                  "Linear Time Regression",
+                  "Observed Data"), 
+       bty = "n",lty=c(1,1,1))
+
+```
+
+The above long-term time plot shows that the fitted curve of our linear model fails to pick up most of the random walk variations in the observed series, while the step by step fit of the SARIMA model is quite close. Unless we fit a very high order term for time, it's impossible for the linear model to pick up such variations. On the other hand, seasonal patterns are reasonably approximated by both models; we can see the small ripples in the raw series replicated and matched by both fitted curves.
+
+```{r}
+plot(unem.ts, xlim = c(2016,2017.417), ylim = c(0,9),
+     main = "Out-of-Sample Fit vs Test Data")
+
+lines(y = test.prediction$fit, x = test.time, col = "red")
+lines(y = test.prediction$fit + 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+lines(y = test.prediction$fit - 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+
+lines(y = f.diff.3$mean, x = test.time, col = "blue")
+lines(y = as.numeric(f.diff.3$lower[,2]), 
+      x = test.time, col = "blue", lty = "dotted")
+lines(y = as.numeric(f.diff.3$upper[,2]), 
+      x = test.time, col = "blue", lty = "dotted")
+
+legend("bottomleft", col = c("blue","red","black"),
+       legend = c("SARIMA out-of-sample predictions",
+                  "lm out-of-sample predictions",
+                  "raw series"), 
+       bty = "n", lty = c("solid","solid","solid"))
+```
+
+Within our test region, we see a clear trade-off between the two models. On the one hand, the mean estimates of the SARIMA model are quite close to the test data, but its confidence bound widens drastically towards mid-2017 so our predictions lack precision. On the other hand for the linear model, even the lower bound of the estimates are consistently far above the test data. However, the confidence bound is quite narrow. Therefore, the SARIMA model makes less biased but less precise estimates and the linear model makes more biased but more precise estimates.
+
+### Forecast Through 2020
+
+```{r}
+new.time = seq(2017.500,2020.917,by = (1/12))
+new.month = c(seq(7,12),seq(1,12),seq(1,12),seq(1,12))
+
+new.prediction = predict.lm(object = unem.lm.quad, se.fit = T,
+           newdata = data.frame(t.lm = new.time, 
+                                mon.lm = as.factor(new.month)))
+
+
+new.df = data.frame("year" = floor(new.time),
+           "month" = new.month,
+           "lm mean estimate" = new.prediction$fit,
+           "lm upper estimate" = new.prediction$fit + 1.96* new.prediction$se.fit,
+           "lm lower estimate" = new.prediction$fit - 1.96* new.prediction$se.fit)
+
+tail(new.df, 12)
+```
+
+The above table shows that forecast of the linear model in 2020 oscillates within 5.5 percent and 6.8 percent. Its confidence intervals don't seem to fluctuate much either.
+
+```{r}
+plot(unem.ts, xlim = c(2015,2020.917), ylim = c(-7,12),
+     main = "Forecast Through 2020")
+
+lines(y = unem.lm.quad$fit, x = t.lm, col = "pink")
+
+lines(y = test.prediction$fit, x = test.time, col = "red")
+lines(y = test.prediction$fit + 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+lines(y = test.prediction$fit - 1.96* test.prediction$se.fit,
+      x = test.time, col = "red",lty = "dotted")
+
+lines(y = new.prediction$fit, x = new.time, col = "red")
+lines(y = new.prediction$fit + 1.96* new.prediction$se.fit,
+      x = new.time, col = "red",lty = "dotted")
+lines(y = new.prediction$fit - 1.96* new.prediction$se.fit,
+      x = new.time, col = "red",lty = "dotted")
+
+lines(y = m.diff.3$fitted, x = t.lm, col = "cyan")
+
+lines(y = f.diff.3.2020$mean, x = c(test.time,new.time), col = "blue")
+lines(y = as.numeric(f.diff.3.2020$lower[,2]), 
+      x = c(test.time,new.time), col = "blue", lty = "dotted")
+lines(y = as.numeric(f.diff.3.2020$upper[,2]), 
+      x = c(test.time,new.time), col = "blue", lty = "dotted")
+
+legend("bottomleft", col = c("blue","cyan","red","pink", "black"),
+       legend = c("SARIMA forecast", "SARIMA fitted",
+                  "Linear Model Forecast", "Linear Model Fitted",
+                  "Observed Data"), 
+       bty = "n", lty = c("solid","solid","solid","solid"))
+```
+
+The time plot above shows that the linear model's mean forecast oscillates around 6 percent without clear upward or downward overall trend, as does its confidence bound. On the other hand the SARIMA model's mean forecast continues the slight downward trend of the raw series and its confidence bound expands drastically to even below zero in 2020, which is nonsensical. For these reasons, we deem both models inadequate to forecast the unemployment rate as far as the end of 2020. 
+
+#Question 3: VAR
+
+You also have data on automotive car sales. Use a VAR model to produce a 1 year forecast on both the unemployment rate and automotive sales for 2017 in the US.
+
+Compare the 1 year forecast for unemployment produced by the VAR and SARIMA models, examining both the accuracy AND variance of the forecast. Do you think the addition of the automotive sales data helps? Why or why not?
+
+## Training VAR Models
+The EDA and plots above showed that both time series have trend and seasonality. Since a VAR model requires both time series to be weakly stationary, we need to remove the trend and seasonality when applying the VAR model. As for the VAR() function, it can incorporate trends and seasonality in the model. According to the documentation, the argument "type = trend" in this function only refers to a linear trend. In our case, it may be inappropriate to use the linear trend. Hence, we will explore taking the 1st difference of both time-series, then finding the best order by using VARselect(..., season = 12).
+
+Continuing insights from the EDA, we attempt to train a model for each of the following differencing options:
+
+  -	Both series (1) take first difference and (2) apply seasonal dummy variables
+  -	Both series (1) take seasonal difference and (2) apply trend as regressor
+  -	Both series (1) take first and seasonal difference
+  -	Both series (1) take no difference (2) apply trend as regressor and (3) apply seasonal dummy variables
+
+```{r}
+combined.raw = ts.intersect(unem.ts, auto.ts)
+
+combined.raw.train = window(combined.raw, end = c(2015, 12))
+combined.raw.test = window(combined.raw, start = c(2016, 1))
+
+unem.var.train = combined.raw.train[,1]
+auto.var.train = combined.raw.train[,2]
+unem.var.test = combined.raw.test[,1]
+auto.var.test = combined.raw.test[,2]
+```
+
+```{r}
+# 1st differenced
+unem.var.train.diff = diff(unem.var.train)
+auto.var.train.diff = diff(auto.var.train)
+
+# 12th differenced
+unem.var.train.diff12 = diff(unem.var.train, lag = 12)
+auto.var.train.diff12 = diff(auto.var.train, lag = 12)
+
+# 1st & 12th differenced
+unem.var.train.diff.diff12 = diff(diff(unem.var.train), lag = 12)
+auto.var.train.diff.diff12 = diff(diff(auto.var.train), lag = 12)
+```
+
+Before building the VAR model, we recall the following from our EDA:
+
+  - Our unit root tests provided strong evidence of a unit root in the unemployment series and weak evidence for that in the auto sales series, and our univariate plots exhibit noticeable seasonal patterns. 
+
+  - All the Unit Root tests rejected the null hypotheses that either the first differenced, seasonally differenced, or first and seasonally differenced series for both Unemployment and Auto Sales contain a unit root, which supports stationarity.
+
+  - The auto sales appear to lead the unemployment rate by a few months. These series are negatively correlated. In addition, the univariate ACF and PACF plots for unemployment show autocorrelation with its own lags, so a VAR model for unemployment will likely include significant estimates of its own lags as well as auto sales lags.
+
+
+### Estimate Model Order
+Now we will build a VAR model. The lag length is determined by the VARselect function. In order to test the way VAR() function works, we used four sets of data and different arguments in VAR. We will compare the model by these diagnostic tests: serial correlation, normality, and acf plots.
+
+```{r}
+# model1,2: 1st differenced data with seasonal dummy variables
+vars::VARselect(cbind(unem.var.train.diff, auto.var.train.diff), 
+                lag.max = 30, season = 12)
+```
+
+Using the first differenced data with seasonal dummy variables, we get different results based on the different criteria. AIC prefers a VAR(12) model, whereas BIC prefers a VAR(3).
+
+
+```{r}
+# 12th differenced
+# model3,4: deseason data with trend included in regression
+VARselect(cbind(unem.var.train.diff12, auto.var.train.diff12), 
+                lag.max = 30, type = "both")
+```
+
+
+Using the seasonally differenced data with the "trend" argument included, AIC prefers a VAR(26) model, whereas BIC prefers a VAR(4).
+
+
+```{r}
+# 1st & 12th differenced
+# model5,6: detrend & deseason data with no dummy variable
+VARselect(cbind(unem.var.train.diff.diff12, auto.var.train.diff.diff12), 
+                lag.max = 30)
+```
+
+Using the first and seasonally differenced data without the "trend" argument included and without seasonal dummy variables, AIC prefers a VAR(25) model, whereas BIC prefers a VAR(12).
+
+```{r}
+# raw data
+# model7,8: raw data with trend included in regression and seasonal dummy variable
+VARselect(cbind(unem.var.train, auto.var.train),
+          lag.max = 30, type = "both", season = 12)
+```
+
+Using the raw time series data without any differencing, but including the "trend" argument and seasonal dummy variables, AIC prefers a VAR(13) model, whereas BIC prefers a VAR(4).
+
+Notice that the above VARselect results suggest very different numbers of lags to include by AICc vs BIC. This is because the two information criteria penalize by different terms. The R documentation shows the following formulation for AICc and BIC.
+
+$$AIC(n) = \ln \hat{\sigma_k^2} + [2k + 2k(k+1)/(n-k-1)]$$
+
+$$SC(n) = \ln \hat{\sigma_k^2} + kIn(n)$$
+
+While the first component in each formula are the same and refer to the log of sum square error, the second terms--the penalty terms--are different. In general, as sample size n grows, BIC's penalty term grows faster than AICc's penalty term with number of estimated lags k. Therefore, BIC is better at penalizing large samples more consistenly and heavily. Considering our sample size of 479, we should choose the orders estimated by BIC over AICc, if both model residuals exhibit white noise behavior. The estimated orders are:
+
+  -	Both series first differenced and seasonal variable(model 1, 2) :                (Order 3 by BIC) (Order 12 by AIC)
+  -	Both series seasonal differenced with trend included in regression(model 3, 4):  (Order 4 by BIC) (Order 26 by AIC)
+    - Recall from EDA that peak of cross-correlation took place between lag 3-7
+  -	Both series first and seasonal differenced with no dummy variable (model 5, 6) : (Order 12 by BIC) (Order 25 by AIC)
+  -	Both series raw with trend as regressor and seasonal dummy variable (model 7, 8) : (Order 4 by BIC) (Order 13 by AIC)
+
+Next we will fit the eight models discussed above and examine the residuals.
+
+```{r}
+# model1,2: 1st differenced data with season dummy variable
+var.diff.mod.lag3 = VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                        p = 3, season = 12) 
+
+var.diff.mod.lag12 = VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                         p = 12, season = 12) 
+
+# 12th differenced
+# model3,4: deseason data with trend included in regression
+var.diff12.mod.lag4 = vars::VAR(cbind(unem.var.train.diff12,auto.var.train.diff12),
+                                p = 4, type = "both") 
+
+var.diff12.mod.lag26 = vars::VAR(cbind(unem.var.train.diff12,auto.var.train.diff12),
+                                 p = 26, type = "both") 
+
+# 1st & 12th differenced
+# model5,6: detrend & deseason data with no dummy variable
+var.diff.diff12.mod.lag12 = VAR(cbind(unem.var.train.diff.diff12,
+                                      auto.var.train.diff.diff12),
+                                p = 12) 
+
+var.diff.diff12.mod.lag25 = VAR(cbind(unem.var.train.diff.diff12,
+                                      auto.var.train.diff.diff12),
+                                p = 25) 
+# raw data
+# model7,8: raw data with trend included in regression and seasonal dummy variable
+var.mod.lag4 = VAR(cbind(unem.var.train, auto.var.train), 
+                  p = 4, type = "both", season = 12)
+var.mod.lag13 = VAR(cbind(unem.var.train, auto.var.train), 
+                  p = 13, type = "both", season = 12)
+```
+
+## Diagnostic Testing -- Serial Correlation
+
+We perform the Portmanteau Test on the model residuals to detect autocorrelation. The test hypothesis is as follows:
+  
+  - Ho : The residuals are not serially correlated.
+  - Ha : The residuals are serially correlated.
+
+```{r}
+# model1,2: 1st differenced data with season dummy variable
+serial.test(var.diff.mod.lag3, lags.pt = 30)
+serial.test(var.diff.mod.lag12, lags.pt = 30)
+```
+
+For the first differenced data with seasonal dummy variables, the VAR(3) model rejects the null hypothesis that the residuals are not serially correlated, while the VAR(12) model fails to reject. 
+
+```{r}
+# 12th differenced
+# model3,4: deseason data with trend included in regression
+serial.test(var.diff12.mod.lag4, lags.pt = 30)
+serial.test(var.diff12.mod.lag26, lags.pt = 30)
+```
+
+For the seasonally differenced data with trend included, the VAR(4) and VAR(26) models both reject the null hypothesis that the residuals are not serially correlated. 
+
+```{r}
+# 1st & 12th differenced
+# model5,6: detrend & deseason data with no dummy variable
+serial.test(var.diff.diff12.mod.lag12, lags.pt = 30)
+serial.test(var.diff.diff12.mod.lag25, lags.pt = 30)
+```
+
+For the first and seasonally differenced data without trend or seasonal dummy variables included, the VAR(12) and VAR(25) models both reject the null hypothesis that the residuals are not serially correlated. 
+
+```{r}
+# raw data
+# model7,8: raw data with trend included in regression and seasonal dummy variable
+serial.test(var.mod.lag4, lags.pt = 30)
+serial.test(var.mod.lag13, lags.pt = 30)
+```
+
+For the raw data with trend and seasonal dummy variables included, the VAR(4) model rejects the null hypothesis that the residuals are not serieally correlated, but the VAR(13) model fails to reject this null hypothesis. 
+
+According to the p-values, Model 2 (a VAR(12) model on first differenced data with seasonal dummy variables) and Model 7 (a VAR(13) model on the raw data with trend and seasonal dummy variables included) failed to reject the null hypothesis that there's no serial correlation in the residuals, so these may be good candidates. 
+
+## Diagnostic Testing -- Normality
+Next we perform the normality test on the model residuals to detect autocorrelation. Test hypothesis is as follows:
+  
+  - Ho : The residuals are normally distributed
+  - Ha : The residuals are NOT normally distributed
+
+```{r}
+normality.test(var.diff.mod.lag3, multivariate.only = TRUE)
+normality.test(var.diff.mod.lag12, multivariate.only = TRUE)
+```
+
+For the first differenced data with seasonal dummy variables, both the VAR(3) and the VAR(12) models reject the null hypothesis that the residuals are normally distributed. 
+
+```{r}
+normality.test(var.diff12.mod.lag4, multivariate.only = TRUE)
+normality.test(var.diff12.mod.lag26, multivariate.only = TRUE)
+```
+
+For the seasonally differenced data with trend included, both the VAR(4) and the VAR(26) models fail to reject the null hypothesis that the residuals are normally distributed.
+
+```{r}
+normality.test(var.diff.diff12.mod.lag12, multivariate.only = TRUE)
+normality.test(var.diff.diff12.mod.lag25, multivariate.only = TRUE)
+```
+
+For the first and seasonally differenced data, the VAR(12) and VAR(25) models both fail to reject the null hypothesis of normality. 
+
+```{r}
+normality.test(var.mod.lag4, multivariate.only = TRUE)
+normality.test(var.mod.lag13, multivariate.only = TRUE)
+```
+
+Finally, for the raw data with trend and seasonal dummy variables included, the VAR(4) and VAR(13) models both reject the null hypothesis of normality. 
+
+From these tests, the following models did not reject the null hypothesis of normally distributed residuals and may be good candidates:
+
+- Model 3: VAR(4) on seasonally differenced data with trend included
+- Model 4: VAR(26) on seasonally differenced data with trend included
+- Model 5: VAR(12) on first and seasonally differenced data
+- Model 6: VAR(25) on first and seasonally differenced data
+
+## Diagnostic Testing -- Residual ACF Plots
+
+Next we will examine the ACF and PACF plots of the residuals for each model. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 1st differenced & seasonal dummies
+# p = 3, model1
+acf(residuals(var.diff.mod.lag3)[,1],104, main = "")
+title("Residuals: First Diff : Unem :p = 3")
+pacf(residuals(var.diff.mod.lag3)[,1],104,main = "")
+title("Residuals: First Diff : Unem :p = 3")
+
+acf(residuals(var.diff.mod.lag3)[,2],104, main = "")
+title("Residuals: First Diff : Auto :p = 3")
+pacf(residuals(var.diff.mod.lag3)[,2],104,main = "")
+title("Residuals: First Diff : Auto :p = 3")
+```
+
+For the VAR(3) model on first differenced data with seasonal dummy variables, the ACF and PACF plots for both unemployment and auto sales show a few significant spikes. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 1st differenced & seasonal dummies
+# p = 12, model2
+acf(residuals(var.diff.mod.lag12)[,1],104, main = "")
+title("Residuals: First Diff : Unem :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,1],104,main = "")
+title("Residuals: First Diff : Unem :p = 12")
+
+acf(residuals(var.diff.mod.lag12)[,2],104, main = "")
+title("Residuals: First Diff : Auto :p = 12")
+pacf(residuals(var.diff.mod.lag12)[,2],104,main = "")
+title("Residuals: First Diff : Auto :p = 12")
+```
+
+For the VAR(12) model on first differenced data with seasonal dummy variables, the ACF and PACF plots for Unemployment and Auto Sales fairly closely resemble white noise, although there are still a few significant spikes. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# seasonal differenced
+# p = 4, model3
+acf(residuals(var.diff12.mod.lag4)[,1],104, main = "")
+title("Residuals: Seasonal Diff: Unem :p = 4")
+pacf(residuals(var.diff12.mod.lag4)[,1],104,main = "")
+title("Residuals: Seasonal Diff: Unem :p = 4")
+
+acf(residuals(var.diff12.mod.lag4)[,2],104, main = "")
+title("Residuals: Seasonal Diff: Auto :p = 4")
+pacf(residuals(var.diff12.mod.lag4)[,2],104,main = "")
+title("Residuals: Seasonal Diff: Auto :p = 4")
+```
+
+For the VAR(4) model on seasonally differenced data with trend, the ACF and PACF plots for both series have several significant spikes and do not resemble white noise.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# seasonal differenced
+# p = 26, model4
+acf(residuals(var.diff12.mod.lag26)[,1],104, main = "")
+title("Residuals: Seasonal Diff: Unem :p = 26")
+pacf(residuals(var.diff12.mod.lag26)[,1],104,main = "")
+title("Residuals: Seasonal Diff: Unem :p = 26")
+
+acf(residuals(var.diff12.mod.lag26)[,2],104, main = "")
+title("Residuals: Seasonal Diff: Auto :p = 26")
+pacf(residuals(var.diff12.mod.lag26)[,2],104,main = "")
+title("Residuals: Seasonal Diff: Auto :p = 26")
+```
+
+For the VAR(26) model on seasonally differenced data with trend, the ACF and PACF plots have some very significant spikes and do not resemble white noise.
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 1st differenced & seasonal differenced
+# p = 12, model5
+acf(residuals(var.diff.diff12.mod.lag12)[,1],104, main = "")
+title("Residuals: 1st and Seas Diff: Unem :p = 12")
+pacf(residuals(var.diff.diff12.mod.lag12)[,1],104,main = "")
+title("Residuals: 1st and Seas Diff: Unem :p = 12")
+
+acf(residuals(var.diff.diff12.mod.lag12)[,2],104, main = "")
+title("Residuals: 1st and Seas Diff: Auto :p = 12")
+pacf(residuals(var.diff.diff12.mod.lag12)[,2],104,main = "")
+title("Residuals: 1st and Seas Diff: Auto :p = 12")
+```
+
+For the VAR(12) model on first and seasonally differenced data, the ACF and PACF plots for both series have significant spikes and do not resemble white noise. 
+
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 1st differenced & seasonal differenced
+# p = 25, model6
+acf(residuals(var.diff.diff12.mod.lag25)[,1],104, main = "")
+title("Residuals: 1st and Seasonal Diff: Unem :p = 25")
+pacf(residuals(var.diff.diff12.mod.lag25)[,1],104,main = "")
+title("Residuals: 1st and Seasonal Diff: Unem :p = 25")
+
+acf(residuals(var.diff.diff12.mod.lag25)[,2],104, main = "")
+title("Residuals: 1st and Seasonal Diff: Auto :p = 25")
+pacf(residuals(var.diff.diff12.mod.lag25)[,2],104,main = "")
+title("Residuals: 1st and Seasonal Diff: Auto :p = 25")
+```
+
+For the VAR(25) model on first and seasonally differenced data, the ACF and PACF plots for both series have significant spikes and do not resemble white noise. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# raw data with trend included in regression and seasonal dummy variable
+# p = 4, model7
+acf(residuals(var.mod.lag4)[,1],104, main = "")
+title("Residuals: Raw Series: Unem :p = 4")
+pacf(residuals(var.mod.lag4)[,1],104,main = "")
+title("Residuals:  Raw Series: Unem :p = 4")
+
+acf(residuals(var.mod.lag4)[,2],104, main = "")
+title("Residuals:  Raw Series: Auto :p = 4")
+pacf(residuals(var.mod.lag4)[,2],104,main = "")
+title("Residuals: Raw Series: Auto :p = 4")
+```
+
+For the VAR(4) model on the raw data with trend and seasonal dummy variables, the ACF and PACF plots both have some very significant spikes and do not resemble white noise. 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# raw data with trend included in regression and seasonal dummy variable
+# p = 13, model8
+acf(residuals(var.mod.lag13)[,1],104, main = "")
+title("Residuals:  Raw Series: Unem :p = 13")
+pacf(residuals(var.mod.lag13)[,1],104,main = "")
+title("Residuals:  Raw Series: Unem :p = 13")
+
+acf(residuals(var.mod.lag13)[,2],104, main = "")
+title("Residuals:  Raw Series: Auto :p = 13")
+pacf(residuals(var.mod.lag13)[,2],104,main = "")
+title("Residuals:  Raw Series: Auto :p = 13")
+```
+
+For the VAR(13) model on the raw data with trend and seasonal dummy variables included, the ACF and PACF plots have a few significant and near significant spikes and do not closely resemble white noise. 
+
+From the residual plots above, the model with first differenced series and seasonal variables performed better in general. Lag order 12 gives residuals that are closest to white noise. We reduced it down to lag order 11 with similar white noise patterns, but the Portmanteau Test (below) rejected the null hypothesis that the residuals are not serially correlated. A model of lag order 10 and 9 starts to show significant pacfs at lag 12 therefore we stop searching down from there. Time plots and residual plots for lag order 11 and 10 are given below as well.
+
+```{r}
+var.diff.mod.lag11 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 11, season = 12) 
+vars::serial.test(var.diff.mod.lag11, lags.pt = 30, type = "PT.adjusted")
+
+var.diff.mod.lag10 = vars::VAR(cbind(unem.var.train.diff, auto.var.train.diff),
+                              p = 10, season = 12) 
+vars::serial.test(var.diff.mod.lag10, lags.pt = 30, type = "PT.adjusted")
+```
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+# 1st differenced & seasonal dummies
+# p = 11
+acf(residuals(var.diff.mod.lag11)[,1],104, main = "")
+title("Residuals: First Diff \n Unem :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,1],104,main = "")
+title("Residuals: First Diff \n Unem :p = 11")
+
+acf(residuals(var.diff.mod.lag11)[,2],104, main = "")
+title("Residuals: First Diff \n Auto :p = 11")
+pacf(residuals(var.diff.mod.lag11)[,2],104,main = "")
+title("Residuals: First Diff \n Auto :p = 11")
+
+# p = 10
+acf(residuals(var.diff.mod.lag10)[,1],104, main = "")
+title("Residuals: First Diff \n Unem :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,1],104,main = "")
+title("Residuals: First Diff \n Unem :p = 10")
+
+acf(residuals(var.diff.mod.lag10)[,2],104, main = "")
+title("Residuals: First Diff \n Auto :p = 10")
+pacf(residuals(var.diff.mod.lag10)[,2],104,main = "")
+title("Residuals: First Diff \n Auto :p = 10")
+```
+
+Based on the Portmanteau Tests and residual results, we proceed with the following three models. In all three, both raw series are first differenced and seasonal variables (as indicators) are included in the VAR model.
+
+  - VAR(3), VAR(11) and VAR(12)
+  
+
+## Examine In-Sample Fit
+
+First, we define a function to compute the appropriate predictions from the VAR model, since we used first differencing.
+
+```{r}
+# Get in-sample-fit by manually adding differenced estimates
+get_insampfit_delta = function(mod, train){
+  na.pad = length(train) - length(fitted(mod)[,1])
+  delta <-c(rep(NA,na.pad),fitted(mod)[,1])
+  insampfit = rep(NA,length(train))
+  for (i in (na.pad+1):480) insampfit[i] <- train[i-1] + delta[i]
+  insampfit
+}
+```
+
+```{r}
+insampfit.lag12 = get_insampfit_delta(var.diff.mod.lag12, unem.var.train)
+insampfit.lag11 = get_insampfit_delta(var.diff.mod.lag11, unem.var.train)
+insampfit.lag3 = get_insampfit_delta(var.diff.mod.lag3, unem.var.train)
+
+insampfit.lag12 = ts(insampfit.lag12, start = c(1976,1), frequency = 12)
+insampfit.lag11 = ts(insampfit.lag11, start = c(1976,1), frequency = 12) 
+insampfit.lag3 =  ts(insampfit.lag3, start = c(1976,1), frequency = 12)
+```
+
+```{r}
+plot(unem.var.train, main = "", ylab = "fitted values")
+lines(insampfit.lag11, col = "blue", lty = "dotted")
+lines(insampfit.lag3, col = "green", lty = "dotted")
+lines(insampfit.lag12, col = "red", lty = "dotted")
+title("In Sample Fit")
+
+legend("bottomleft", legend = c("p = 12", "p = 11", "p = 3"),
+       lty = c("dotted","dotted", "dotted"), bty = "n",
+       col = c("red", "blue", "green"))
+```
+
+The in-sample fit for all three models are very close to the raw series. To further distinguish between them, we examine their out-of-sample performance next.
+
+### Compare Models Based on Out of Sample Errors Through Jun 2017
+
+Since the VAR() function does not integrate the model for forecasting like Arima() does, and since we used first differencing, we define a function to compute the appropriate forecasts from the VAR model. 
+
+```{r}
+# Get out-of-sample-performance by manually adding differenced estimates
+# set X_t-1 obs as base
+base = window(combined.raw, start = c(2015,12))[,1] 
+# Function
+get_outsamp = function(mod, base, ahead){
+  pred = predict(mod, n.ahead = ahead)$fcst$unem.var.train.diff
+  delta.estimate = pred[,1]
+  lower.ci = pred[,2]
+  upper.ci = pred[,3]
+  var.fore = rep(0,18)
+  var.low.ci = rep(0,18)
+  var.upp.ci = rep(0,18)
+  for (i in 1:18) var.fore[i] <- base[i] + delta.estimate[i]
+  for (i in 1:18) var.low.ci[i] <- base[i] + lower.ci[i]
+  for (i in 1:18) var.upp.ci[i] <- base[i] + upper.ci[i]
+  data.frame(var.fore,var.low.ci,var.upp.ci)
+}
+```
+
+Next we compute forecasts for the next 18 months from the VAR(3), VAR(11), and VAR(12) models. 
+
+```{r}
+f.var.3 = get_outsamp(var.diff.mod.lag3, base, 18)
+f.var.11 = get_outsamp(var.diff.mod.lag11, base, 18)
+f.var.12 = get_outsamp(var.diff.mod.lag12, base, 18)
+```
+
+```{r}
+var.fore.df = data.frame("year" = as.numeric(floor(time(unem.var.test))),
+             "month" = c(seq(1,12),seq(1,6)),
+             "VAR3.est" = f.var.3$var.fore,
+             "VAR3.err" = f.var.3$var.fore - as.numeric(unem.var.test),
+             "VAR11.est" = f.var.11$var.fore,
+             "VAR11.err" = f.var.11$var.fore - as.numeric(unem.var.test),   
+             "VAR12.est" = f.var.12$var.fore,
+             "VAR12.err" = f.var.12$var.fore - as.numeric(unem.var.test) )
+
+var.fore.df
+```
+
+
+VAR(12) RMSE: `r sqrt(mean((var.fore.df$VAR12.err)^2))`
+
+VAR(11) RMSE: `r sqrt(mean((var.fore.df$VAR11.err)^2))`
+
+VAR(3) RMSE: `r sqrt(mean((var.fore.df$VAR3.err)^2))`
+
+
+In terms of out-of-sample comparison, the VAR(3) performs marginally better than the other two. This is a small contradiction with the residual plot studies and serial correlation test. Instead, the RMSE results align with the preferred lag order estimated by BIC. Recall that the RMSE for our SARIMA(2,1,1)(1,0,1) is 0.1472144, so the SARIMA model is still better in terms of out-of-sample performance.
+
+The three VAR models perform very closely, as illustrated by the forecast plot below. The VAR(3) forecast appears more sensitive to the observations at June 2016, which is probably the reason that its RMSE is lower than the other two models. Notice that the confidence bound of all three VAR models are narrower and more consistent than the SARIMA(2,1,1)(1,0,1) model.
+
+```{r}
+plot(unem.var.test, ylim = c(3.5,6), 
+     main = "Out-of-Sample Forecasts", lwd = 2)
+
+lines(y = f.var.3$var.fore,x = as.numeric(time(unem.var.test)),col = "green")
+lines(y = f.var.11$var.fore,x = as.numeric(time(unem.var.test)),col = "blue")
+lines(y = f.var.12$var.fore,x = as.numeric(time(unem.var.test)),col = "red")
+
+lines(y = f.var.3$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "green", lty = "dotted")
+lines(y = f.var.3$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "green", lty = "dotted")
+lines(y = f.var.11$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "blue", lty = "dotted")
+lines(y = f.var.11$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "blue", lty = "dotted")
+lines(y = f.var.12$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+lines(y = f.var.12$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+
+legend("bottomleft", legend = c("p = 12","p = 11","p = 3","test series"),
+       lty = c("solid","solid", "solid", "solid"), bty = "n",
+       col = c("red", "blue", "green", "black"))
+```
+
+### Final Model
+
+Given that the residuals of the VAR(3) model have very mild serial correlation, marginally better RMSE, and much lower lag order than the VAR(11) and VAR(12) models, we should strongly consider it as the final choice. In the following, we examine the significance and interpretation of its coefficients.
+
+```{r}
+summary(var.diff.mod.lag3)
+
+```
+
+From the model summary, we observe: 
+
+  1) Coefficients of auto sales lags are generally significant and negative. This confirms our intuition in the EDA that auto sales leads unemployment rate in opposite directions. 
+  
+  2) Coefficients of unemployment lags on unemployment rate are close to zero or generally positive, which is somewhat intuitive. If unemployment rate was high 2-3 months ago, it will probably stay high, especially in times of persistent economic boom or busts. 
+  
+  3) Coefficients of unemployment lags are not significant on auto sales. This confirms our EDA insight that auto sales leads unemployment, not the other way around.
+
+The estimated VAR(3) model specification is as follows:
+
+\begin{align*}
+\hat{x_t} = -0.002672 - 0.002955 \cdot x_{t-1} - 0.0003424\cdot y_{t-1} + 0.1641 \cdot x_{t-2} -0.0002699\cdot y_{t-2} \\
++ 0.1591 \cdot x_{t-3} - 0.0001394 \cdot y_{t-3} -1.075 \cdot sd1 - 1.304 \cdot sd2 - 1.455 \cdot sd3 - 0.8404 \cdot sd4 \\ 
+- 0.2696 \cdot sd5 - 0.8708 \cdot sd6 - 1.24 \cdot sd7 - 1.176 \cdot sd8 - 1.034 \cdot sd9 - 0.7967 \cdot sd10 \\ 
+- 0.9107 \cdot sd11
+\end{align*}
+
+
+\begin{align*}
+\hat{y_t} = 1.68305 -59.89492 \cdot x_{t-1} -0.61689\cdot y_{t-1} -20.10760 \cdot x_{t-2} -0.48635\cdot y_{t-2} \\
+-25.04746 \cdot x_{t-3} -0.24112 \cdot y_{t-3} + 254.58641 \cdot sd1 + 429.29052 \cdot sd2 + 238.22932 \cdot sd3 \\
++ 323.25969 \cdot sd4  + 194.73408 \cdot sd5 + 119.09833 \cdot sd6 + 160.63555 \cdot sd7 + 27.27200 \cdot sd8 \\
++ 89.38955 \cdot sd9 + 17.67736 \cdot sd10 + 184.94625 \cdot sd11
+\end{align*}
+
+where the two respective residual series are bivariate white noises.
+
+To check for stationarity, the characteristic function can be evaluated using the determinant:
+
+\begin{align*}
+\hat{x_t} = -0.002672 - 0.002955 \cdot x_{t-1} - 0.0003424\cdot y_{t-1} + 0.1641 \cdot x_{t-2} -0.0002699\cdot y_{t-2} \\
++ 0.1591 \cdot x_{t-3} - 0.0001394 \cdot y_{t-3} -1.075 \cdot sd1 - 1.304 \cdot sd2 - 1.455 \cdot sd3 - 0.8404 \cdot sd4 \\ 
+- 0.2696 \cdot sd5 - 0.8708 \cdot sd6 - 1.24 \cdot sd7 - 1.176 \cdot sd8 - 1.034 \cdot sd9 - 0.7967 \cdot sd10 \\ 
+- 0.9107 \cdot sd11
+\end{align*}
+
+\begin{align*}
+\hat{y_t} = 1.68305 -59.89492 \cdot x_{t-1} -0.61689\cdot y_{t-1} -20.10760 \cdot x_{t-2} -0.48635\cdot y_{t-2} \\
+-25.04746 \cdot x_{t-3} -0.24112 \cdot y_{t-3} + 254.58641 \cdot sd1 + 429.29052 \cdot sd2 + 238.22932 \cdot sd3 \\
++ 323.25969 \cdot sd4  + 194.73408 \cdot sd5 + 119.09833 \cdot sd6 + 160.63555 \cdot sd7 + 27.27200 \cdot sd8 \\
++ 89.38955 \cdot sd9 + 17.67736 \cdot sd10 + 184.94625 \cdot sd11
+\end{align*}
+
+where the two respective residual series are bivariate white noises.
+
+To check for stationarity, the characteristic function can be evaluated using the determinant:
+
+\begin{align*}
+&
+\left | \begin{pmatrix}
+1 & 0\\ 
+0 & 1
+\end{pmatrix}
+-  \begin{pmatrix}
+-0.002955 & - 0.0003424\\ 
+-59.89492 & -0.61689
+\end{pmatrix}B 
+-  \begin{pmatrix}
+0.1641 & -0.0002699\\ 
+-20.10760 & -0.48635
+\end{pmatrix}B^2
+-  \begin{pmatrix}
+0.1591 & - 0.0001394\\ 
+-25.04746 & -0.24112
+\end{pmatrix}B^3
+\right | \\
+&=
+\begin{vmatrix}
+(1+0.002955B-0.1641B^2-0.1591B^3) & (0.0003424B+0.0002699B^2+0.0001394B^3)\\ 
+(59.89492B+20.10760B^2+25.04746B^3) & (1+0.61689B+0.48635B^2+0.24112B^3) \\
+\end{vmatrix}\\
+&= -0.04185381B^6 -0.1265094B^5 - 0.1995974B^4 -0.04082497B^3 + 0.3035649B^2 + 0.6198450000000001B + 1
+\end{align*}
+
+
+From this it can be verified that the fitted VAR(3) model is stationary since all the roots exceed unity in absolute value:
+
+```{r}
+Mod(polyroot(c(1,0.6198450000000001,0.3035649,-0.04082497,-0.1995974,-0.1265094,-0.04185381)))
+```
+
+
+### Comparing the VAR(3) Model Against the SARIMA(2,1,1)(1,0,1)[12] Model: 
+
+```{r, out.width= ".49\\linewidth", fig.width=5, fig.height=4,fig.show='hold'}
+
+plot(forecast(m.diff.3,h=18),xlim=c(816,834),xlab="Time",ylab="Unemployment Rate")
+
+plot(y = f.var.3$var.fore,x = as.numeric(time(unem.var.test)), type="l", col = "red",xlab="Time",ylab="Unemployment Rate", main="VAR(3) Forecast",ylim=c(0,10))
+lines(y = f.var.3$var.low.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+lines(y = f.var.3$var.upp.ci,
+      x = as.numeric(time(unem.var.test)),col = "red", lty = "dotted")
+```
+
+
+In terms of in-sample fit, both models approximate the raw series well, as depicted by the earlier time plots. In terms of out-of-sample 18 steps ahead performance, both models had close RMSE measures. The two models are so similar in these accuracy measures possibly because 1) Both VAR and SARIMA models perform step by step forecasts that take advantage of autocorrelations with the series's own lags, with heavy reliance on the past observations in the raw series. This is very different from the linear regression model, which can only predict with the time indexes, so information is much more restricted. 2) Both the VAR(3) and SARIMA(2,1,1)(1,0,1)[12] models are integrated by order 1 (first differenced series as input) and incorporate AR components of similar order. 
+
+However, variance of their forecasts are very different. Variance of the SARIMA model grows drastically with time because its step-by-step forecast has to depend more and more on estimated instead of observed lag values as time goes on. Each estimated lag value contributes its own uncertainty towards the next forecast. On the other hand, although the VAR model has a similar forecast mechanism, it has much more consistent forecast variance. By accounting for cross-correlation in the raw series and thus modeling residuals as bivariate white noise, the VAR mechanism manages to impose heavier structure on the residuals (thus coefficient estimates and forecasts) so they seem more restricted than the SARIMA model.
+
+One may be surpised that the VAR(3) model does not perform much better than the SARIMA(2,1,1)(1,0,1)[12] model, given that we have useful information of auto sales that leads unemployment rate. This is because: 1) The VAR model limits us to auto-regressive terms, whereas the SARIMA model allows moving average terms to directly account for moving average components. 2) The VAR model can only account for seasonal patterns with indicator variables; we are deprived of the option to account for seasonal auto-regressive or seasonal moving average terms.
+
+In conclusion, to forecast unemployment rate, one can consider a SARIMA model for more unbiased estimators, or a VAR model for more precise predictions.
